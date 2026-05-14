@@ -46,7 +46,47 @@ def test_no_args_prints_help_and_zero():
     assert "--scan" in out and "--issues" in out
 
 
-def test_scan_writes_markdown(tmp_path: Path) -> None:
+def test_scan_with_llm_narrative_mocked(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    (repo / "a.py").write_text("x = 1\n", encoding="utf-8")
+    cfg = tmp_path / "cfg"
+    cfg.mkdir()
+    monkeypatch.setenv("SECANALYZER_CONFIG_DIR", str(cfg))
+    (cfg / "llm_credentials.json").write_text(
+        '{"provider":"claude","api_key":"sk-ant-api03-' + "k" * 24 + '"}',
+        encoding="utf-8",
+    )
+
+    def fake_gen(
+        prov: str,
+        key: str,
+        inv: str,
+        *,
+        urlopen=None,
+    ) -> tuple[str, list[str]]:
+        assert "a.py" in inv
+        return "## Executive summary\n\nMock narrative.\n", []
+
+    monkeypatch.setattr(
+        "secanalyzer.llm.generate_repo_scan_markdown",
+        fake_gen,
+    )
+    out_md = tmp_path / "out.md"
+    buf_err = StringIO()
+    with redirect_stderr(buf_err):
+        code = cli.main(["--scan", str(repo), "-o", str(out_md)])
+    assert code == 0
+    text = out_md.read_text(encoding="utf-8")
+    assert "LLM security narrative" in text
+    assert "Mock narrative" in text
+
+
+def test_scan_writes_markdown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SECANALYZER_CONFIG_DIR", str(tmp_path / "empty_cfg"))
     repo = tmp_path / "repo"
     repo.mkdir()
     (repo / "hello.py").write_text('print("hi")\n', encoding="utf-8")
@@ -58,6 +98,9 @@ def test_scan_writes_markdown(tmp_path: Path) -> None:
     text = out_md.read_text(encoding="utf-8")
     assert "Repository security scan" in text
     assert "hello.py" in text
+    assert "LLM narrative omitted" in text
+    assert "## Snippets" not in text
+    assert 'print("hi")' not in text
 
 
 def test_scan_redaction_warning(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -87,6 +130,40 @@ def test_mutually_exclusive_actions() -> None:
         code = cli.main(["--api-key-status", "--scan", "."])
     assert code == 1
     assert "one primary action" in buf_err.getvalue()
+
+
+def test_test_llm_missing_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SECANALYZER_CONFIG_DIR", str(tmp_path))
+    buf_err = StringIO()
+    with redirect_stderr(buf_err):
+        code = cli.main(["--test-llm"])
+    assert code == 1
+    assert "not configured" in buf_err.getvalue().lower()
+
+
+def test_test_llm_ok_mocked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SECANALYZER_CONFIG_DIR", str(tmp_path))
+    (tmp_path / "llm_credentials.json").write_text(
+        '{"provider":"claude","api_key":"sk-ant-api03-' + "k" * 24 + '"}',
+        encoding="utf-8",
+    )
+
+    def fake_ping(
+        provider: str,
+        api_key: str,
+        *,
+        urlopen=None,
+    ) -> str:
+        assert provider == "claude"
+        return "OK"
+
+    monkeypatch.setattr("secanalyzer.llm.ping_llm", fake_ping)
+    buf_out = StringIO()
+    buf_err = StringIO()
+    with redirect_stdout(buf_out), redirect_stderr(buf_err):
+        code = cli.main(["--test-llm"])
+    assert code == 0
+    assert "[OK]" in buf_out.getvalue() and "claude" in buf_out.getvalue()
 
 
 def test_issues_requires_github_token(

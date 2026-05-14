@@ -2,36 +2,30 @@
 
 ## Reporting a vulnerability
 
-Please report security issues privately (do not open a public GitHub issue) so they can be addressed before wider disclosure. Contact the repository maintainer via the course or project channel described in the course syllabus, or use GitHub **Security Advisories** if enabled for this repository.
+Please **do not** open a public GitHub issue for undisclosed security problems. For this course project, contact the maintainers privately (for example, your instructor or the repository owner) with enough detail to reproduce the issue. Include affected versions, steps to reproduce, and impact if known.
 
-Include: affected version or commit, reproduction steps, and impact assessment when possible.
+## Data handling and third-party services
 
-## Data handling guarantees
+`secanalyzer` may call **GitHub** (REST API) and **LLM vendors** (Anthropic Claude or Google Gemini) when you use those features. API keys and tokens are stored only under the user config directory and are sent only in HTTP headers or query parameters as required by each API—not embedded in prompts as instructions.
 
-This tool is designed so that **credentials are never printed to stdout** and are **not embedded in LLM prompts** by design: before each LLM call the tool runs a **pre-send filter** (pattern scan aligned with `--scan` redaction). If credential-shaped data is detected in the fully assembled prompt, the request is **aborted** (no network send). GitHub and LLM credentials are stored under the OS user config directory (override with `SECANALYZER_CONFIG_DIR` for testing only).
+### What may be sent to an LLM
 
-### What may be sent to third-party LLM providers (`--issues` and future LLM-backed `--scan`)
+| Feature | Content |
+|--------|---------|
+| **`--issues`** | PR/issue metadata, titles, bodies, and truncated patch text you choose to include, wrapped in delimiter blocks. Output must match a fixed JSON schema before display. |
+| **`--scan` (optional narrative)** | A **bounded** text block: scan root path, counts, extension histogram, up to a capped list of relative paths, and up to a few **short, redacted** code excerpts—**not** the full repository. The model is asked to return Markdown prose only (no JSON). |
 
-- **GitHub issue and PR metadata** you explicitly select: title, body, and (for PRs) truncated per-file patch summaries from the GitHub API — wrapped in delimiter markers and paired with a fixed system instruction that treats that region as untrusted data.
-- **Repository contents** (when LLM-backed scan is enabled) that pass extension allowlisting and path confinement, after **automated redaction** of common secret patterns. Redaction is best-effort and **not a substitute** for removing real secrets from your tree before analysis.
+Heuristic **redaction** runs on file content used in reports and on the **entire outbound prompt** before send. If credential-shaped patterns remain after redaction, the tool **aborts** the LLM request.
 
-### What must not be sent
+### What must not be sent (design intent)
 
-- **GitHub personal access tokens** and **LLM API keys** — used only in HTTP headers / query parameters to the respective APIs, not placed inside LLM prompt bodies. The pre-send filter aborts if credential-shaped strings appear anywhere in the outbound prompt text.
+- API keys, GitHub tokens, or other secrets as literal prompt text (blocked by pre-send checks when patterns match).
+- Arbitrary binary or non-allowlisted paths during `--scan` (extension allowlist and path confinement under the scan root).
 
-### Local filesystem
+### Residual risk
 
-- **`--scan`** resolves the target path and only reads files **under that root** (with `followlinks=False` during directory walk). Symlink tricks that point outside the repository should not expand into reads of arbitrary paths.
+Regex-based redaction can **miss** novel secret formats. Vendor **retention and training policies** apply to any text you send. Run the tool only on repositories you are permitted to analyze, and review vendor terms for your organization.
 
-### CI and automated checks
+## Supply chain
 
-The repository ships a GitHub Actions workflow ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) that, on each push and pull request to `main` or `master`, runs **pytest**, **bandit** on `src/secanalyzer`, and **pip-audit** against the **frozen** `uv.lock` environment. This does not replace manual review of dependency upgrades: treat lockfile changes as security-relevant.
-
-### Supply chain
-
-- Dependencies are managed with **uv** and a **lockfile** in this repository. Prefer `uv sync --frozen` in CI and before releases.
-
-## Limitations
-
-- **Prompt injection** from hostile PR/issue content is an industry-wide open problem; mitigations (delimiter wrapping, schema validation) reduce risk but cannot eliminate it. Use the tool only on repositories you trust for write access, and review model output critically.
-- **Secret redaction** uses heuristics; novel secret formats may slip through. Treat any LLM-boundary crossing as potentially sensitive.
+Dependencies are pinned in `uv.lock`. CI runs `uv sync --frozen`, `bandit`, and `pip-audit`. Treat lockfile changes as security-sensitive in code review.

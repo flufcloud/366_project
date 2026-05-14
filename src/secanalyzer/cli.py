@@ -45,6 +45,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Check whether configured API keys are present and valid.",
     )
     parser.add_argument(
+        "--test-llm",
+        action="store_true",
+        help="Send a minimal request to the configured LLM vendor to verify the API key.",
+    )
+    parser.add_argument(
         "--set-token",
         choices=("github", "llm"),
         metavar="KIND",
@@ -70,6 +75,8 @@ def _mutating_actions(args: argparse.Namespace) -> list[str]:
         names.append("--set-token")
     if args.api_key_status:
         names.append("--api-key-status")
+    if args.test_llm:
+        names.append("--test-llm")
     if args.scan is not None:
         names.append("--scan")
     if args.issues is not None:
@@ -144,10 +151,37 @@ def _run_api_key_status() -> int:
     return 0 if healthy else 1
 
 
+def _run_test_llm() -> int:
+    from secanalyzer import config
+    from secanalyzer import llm as llm_mod
+    from secanalyzer.exceptions import ConfigurationError, LLMError
+
+    try:
+        cfg = config.load_llm_config()
+    except ConfigurationError as e:
+        raise UserFacingError(str(e)) from e
+    if cfg is None:
+        raise UserFacingError(
+            "LLM not configured. Run: secanalyzer --set-token llm --provider claude (or gemini).",
+        )
+    provider, api_key = cfg
+    try:
+        reply = llm_mod.ping_llm(provider, api_key)
+    except LLMError as e:
+        raise UserFacingError(str(e)) from e
+    preview = reply.replace("\n", " ").strip()
+    if len(preview) > 120:
+        preview = preview[:117] + "..."
+    print(f"[OK] LLM API reachable ({provider}). Model reply: {preview!r}")
+    return 0
+
+
 def _run_scan(scan_path: str, output: str | None) -> int:
+    from secanalyzer import config
+    from secanalyzer import llm as llm_mod
     from secanalyzer import output as outmod
     from secanalyzer import repo_analyzer
-    from secanalyzer.exceptions import ScanError
+    from secanalyzer.exceptions import LLMError, ScanError
 
     out_path = Path(output).expanduser() if output else None
     try:
@@ -160,7 +194,44 @@ def _run_scan(scan_path: str, output: str | None) -> int:
             "[WARNING] Content redacted before reporting: "
             f"{report.total_redactions} pattern match(es) in scanned files.\n",
         )
-    md = repo_analyzer.report_to_markdown(report)
+    md_base = repo_analyzer.report_to_markdown(
+        report,
+        include_full_file_snippets=False,
+    )
+    inventory = repo_analyzer.build_scan_inventory_for_llm(report)
+    llm_cfg = config.load_llm_config()
+    if llm_cfg:
+        provider, api_key = llm_cfg
+        try:
+            narrative, llm_warns = llm_mod.generate_repo_scan_markdown(
+                provider,
+                api_key,
+                inventory,
+            )
+            for w in llm_warns:
+                sys.stderr.write(f"[WARNING] {w}\n")
+            md = (
+                md_base
+                + "\n---\n\n## LLM security narrative\n\n"
+                + narrative.strip()
+                + "\n"
+            )
+        except LLMError as e:
+            sys.stderr.write(
+                f"[WARNING] LLM narrative skipped: {e}\n",
+            )
+            md = (
+                md_base
+                + "\n---\n\n> **LLM narrative unavailable.** "
+                f"{e}\n"
+            )
+    else:
+        md = (
+            md_base
+            + "\n---\n\n> **LLM narrative omitted** — no LLM credentials stored. "
+            "Run `secanalyzer --set-token llm --provider claude` (or `gemini`), then re-run "
+            "`--scan` for a concise written summary (target ~1–4 pages).\n"
+        )
     try:
         outmod.write_report(md, out_path)
     except OSError as e:
@@ -196,6 +267,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         if args.api_key_status:
             return _run_api_key_status()
+
+        if args.test_llm:
+            return _run_test_llm()
 
         if args.scan is not None:
             return _run_scan(args.scan, args.output)

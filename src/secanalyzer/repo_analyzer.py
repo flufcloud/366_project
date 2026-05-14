@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -243,8 +244,53 @@ def scan_repository(root_arg: str) -> ScanReport:
     return report
 
 
-def report_to_markdown(report: ScanReport) -> str:
-    """Emit deterministic Markdown: file index, stats, and redacted snippets (no LLM in this path)."""
+# Bounded context for optional LLM narrative (paths + small excerpts only).
+_LLM_PATH_LIST_CAP = 200
+_LLM_SAMPLE_FILE_CAP = 5
+_LLM_SAMPLE_CHAR_CAP = 1_200
+
+
+def build_scan_inventory_for_llm(report: ScanReport) -> str:
+    """Build a bounded text inventory for scan narrative (no full-repo paste)."""
+    lines: list[str] = []
+    lines.append(f"scan_root={report.root}")
+    lines.append(f"file_count={len(report.files)}")
+    lines.append(f"redaction_pattern_hits_total={report.total_redactions}")
+    exts = Counter(f.extension for f in report.files)
+    lines.append("extensions=" + ", ".join(f"{k}:{v}" for k, v in sorted(exts.items())))
+    lines.append("")
+    lines.append("paths:")
+    for f in report.files[:_LLM_PATH_LIST_CAP]:
+        lines.append(f.relative_path.replace("\\", "/"))
+    if len(report.files) > _LLM_PATH_LIST_CAP:
+        lines.append(f"... ({len(report.files) - _LLM_PATH_LIST_CAP} more paths omitted)")
+    lines.append("")
+    lines.append("redacted_excerpts (truncated; do not treat as complete source):")
+    samples = sorted(
+        (f for f in report.files if f.snippet),
+        key=lambda x: x.size_bytes,
+        reverse=True,
+    )[:_LLM_SAMPLE_FILE_CAP]
+    for f in samples:
+        body = (f.snippet or "")[:_LLM_SAMPLE_CHAR_CAP]
+        path_posix = f.relative_path.replace("\\", "/")
+        lines.append(f"--- file:{path_posix} ---")
+        lines.append(body)
+        if f.snippet and len(f.snippet) > _LLM_SAMPLE_CHAR_CAP:
+            lines.append("... [truncated]")
+    return "\n".join(lines)
+
+
+def report_to_markdown(
+    report: ScanReport,
+    *,
+    include_full_file_snippets: bool = False,
+) -> str:
+    """Emit deterministic Markdown: metadata, overview, optional warnings, file index.
+
+    By default **does not** embed every file's source (that produced unusably long reports).
+    Set ``include_full_file_snippets=True`` only for deep local debugging.
+    """
     lines: list[str] = []
     lines.append("# Repository security scan")
     lines.append("")
@@ -260,9 +306,10 @@ def report_to_markdown(report: ScanReport) -> str:
     lines.append("## Overview")
     lines.append("")
     lines.append(
-        "This report is generated locally from allowlisted source files. "
-        "An optional LLM pass could later add architecture narrative and deeper "
-        "security commentary on top of this deterministic output.",
+        "This section is a **deterministic inventory** from allowlisted source files "
+        "(counts, paths, redaction totals). A **concise LLM narrative** is appended "
+        "when LLM credentials are configured (`--set-token llm`); otherwise only this "
+        "inventory is emitted (no full-repo code dump).",
     )
     lines.append("")
     if report.warnings:
@@ -283,15 +330,16 @@ def report_to_markdown(report: ScanReport) -> str:
             f"{f.redaction_hits} | {note} |",
         )
     lines.append("")
-    lines.append("## Snippets (redacted)")
-    lines.append("")
-    for f in report.files:
-        if not f.snippet:
-            continue
-        lines.append(f"### `{f.relative_path}`")
+    if include_full_file_snippets:
+        lines.append("## Snippets (redacted) — full excerpts (debug only)")
         lines.append("")
-        lines.append("```text")
-        lines.append(f.snippet.strip("\n"))
-        lines.append("```")
-        lines.append("")
+        for f in report.files:
+            if not f.snippet:
+                continue
+            lines.append(f"### `{f.relative_path}`")
+            lines.append("")
+            lines.append("```text")
+            lines.append(f.snippet.strip("\n"))
+            lines.append("```")
+            lines.append("")
     return "\n".join(lines).rstrip() + "\n"

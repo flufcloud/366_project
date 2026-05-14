@@ -21,6 +21,7 @@ Point the tool at any repository and it will automatically generate structured d
 - [Security and Data Handling](#security-and-data-handling)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
+- [Architecture & security reports](docs/TECHNICAL_REPORT.md) — see also [security report](docs/SECURITY_REPORT.md)
 
 ---
 
@@ -28,7 +29,7 @@ Point the tool at any repository and it will automatically generate structured d
 
 | Feature | Description |
 |---|---|
-| **Codebase Documentation Engine** | Recursively scans a repository and emits Markdown (file index, redacted snippets, and security notes). Narrative enrichment via LLM may be added later. |
+| **Codebase Documentation Engine** | Scans allowlisted files, emits a compact Markdown **inventory**, and (when an LLM key is stored) appends a **concise narrative** from a bounded excerpt of the tree — not a full code dump. |
 | **Issue & PR Analyzer** | Authenticates with GitHub, presents an interactive menu of open issues and PRs, and classifies each item's security risk with a justification. |
 | **Preliminary Solutions** | For every flagged issue or PR, generates a plain-language suggested fix or direction of investigation. |
 | **Multi-LLM Support** | Choose your own LLM backend — Claude, Gemini, and others are supported. |
@@ -239,6 +240,17 @@ For full details on data handling guarantees and how to report a vulnerability, 
 
 ## Troubleshooting
 
+**`Project virtual environment directory ... cannot be used ... (no Python executable was found)`** (often in **WSL**)
+
+The `.venv` in this repo was almost certainly created on **Windows** (`Scripts\python.exe`). Linux/WSL expects `bin/python`. From the project root in WSL, remove the old env and sync again:
+
+```bash
+rm -rf .venv
+uv sync --all-groups
+```
+
+Prefer keeping the project under the **Linux filesystem** (e.g. `~/366_project`) if you mainly use WSL, to avoid cross-OS venv confusion on `/mnt/c/...`.
+
 **`command not found: secanalyzer`**
 
 Use `uv run secanalyzer …` from the project directory, or activate the venv first: `source .venv/bin/activate` (Linux/WSL) then `secanalyzer`. You can also run `uv run python -m secanalyzer`.
@@ -254,6 +266,10 @@ Run `uv run secanalyzer --set-token llm --provider claude` (or `gemini`). Use `-
 **`[WARNING] API unavailable — cannot reach GitHub`**
 
 Check your internet connection. If the issue persists, GitHub may be experiencing an outage.
+
+**LLM rate limits or strict per-request token caps**
+
+Set `SECANALYZER_LLM_MAX_USER_TOKENS` to a small positive value (estimated tokens for the **user** message, e.g. `1000`). Issue/PR text is **compressed** (line caps, blank-line trimming) and large patches are **summarized in multiple smaller requests** before the final JSON triage. Scan narratives use the same budget and may digest the inventory in stages. Optional: `SECANALYZER_LLM_BATCH_DELAY_SEC` (default `0.65`) adds a pause between batch calls to ease RPM limits.
 
 **`[WARNING] Content redacted before sending to LLM`** / **`Aborting LLM request: credential-shaped patterns`**
 

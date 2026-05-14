@@ -24,6 +24,15 @@ cd /mnt/c/Users/<You>/Desktop/academic/366/366_project
 
 All commands below are run from the **repository root** (`366_project`).
 
+**If you already ran `uv sync` from Windows PowerShell or CMD:** the `.venv` folder is a **Windows** virtualenv (`Scripts/`, not Linux `bin/`). WSL cannot use it. Remove it once, then sync inside WSL:
+
+```bash
+rm -rf .venv
+uv sync --all-groups
+```
+
+If you later use **both** Windows and WSL on the same clone, use **separate clones** (e.g. one on `%USERPROFILE%\projects\` and one under `~/projects` in the Linux filesystem), or delete `.venv` each time you switch OS so `uv` can recreate the right layout.
+
 ---
 
 ## 2. Install the tool (one-time per clone)
@@ -112,9 +121,15 @@ uv run secanalyzer --scan /absolute/or/relative/path/to/repo
 uv run secanalyzer --scan /path/to/repo -o ./scan-report.md
 ```
 
-**What you get:** A Markdown report with an allowlisted file index, redacted snippets where patterns look like secrets, and notes. If redaction ran, you will see a **`[WARNING]`** line on stderr.
+**What you get:**
 
-**No GitHub or LLM keys are required** for `--scan` only.
+1. **Deterministic inventory** — Markdown table of allowlisted files (paths, sizes, line counts, redaction hit counts), plus scan metadata. **Full-file code dumps are not included** in the report (they were unusably long and not a substitute for a written assessment).
+
+2. **LLM narrative (optional)** — If you completed **section 3b** (LLM API key), the tool sends only a **bounded snapshot** to the model (up to 200 paths, an extension histogram, and up to five small redacted excerpts of at most 1,200 characters each). The model is asked for a **concise security/architecture Markdown** section (about **1–4 printed pages** of prose). If no LLM key is stored, the report ends with a short note telling you how to enable the narrative.
+
+If redaction ran during scanning, you will see a **`[WARNING]`** line on stderr.
+
+**GitHub tokens are not** required for `--scan`. An **LLM key** is optional but recommended if you want the narrative section.
 
 ---
 

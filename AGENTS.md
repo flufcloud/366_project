@@ -11,7 +11,10 @@ Living notes for humans and coding agents. **Update this file** as phases comple
 | [src/secanalyzer/](src/secanalyzer/) | Application code |
 | [src/secanalyzer/exceptions.py](src/secanalyzer/exceptions.py) | `UserFacingError`, `GitHubApiError`, `LLMError`, etc. (CLI → stderr, no tracebacks) |
 | [tests/](tests/) | `pytest` suite |
+| [SECURITY.md](SECURITY.md) | Vulnerability reporting + data-handling guarantees |
 | [QUICKSTART.md](QUICKSTART.md) | Step-by-step: install, tokens, `--scan`, `--issues` |
+| [docs/TECHNICAL_REPORT.md](docs/TECHNICAL_REPORT.md) | Architecture, data flows, engineering decisions (presentation-oriented) |
+| [docs/SECURITY_REPORT.md](docs/SECURITY_REPORT.md) | Threat catalog ↔ mitigations ↔ code/CI mapping |
 | [M2_Agile_Requirements.md](M2_Agile_Requirements.md) | MVP, NFRs, acceptance criteria |
 | [M3_Design_Document_ThreatModeling.md](M3_Design_Document_ThreatModeling.md) | Components A1–A6, threats, mitigations (file contains large base64 after §5 — use lines 1–98 for text) |
 

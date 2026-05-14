@@ -161,6 +161,13 @@ def run_interactive_issues(
                 api_key,
                 sys_prompt,
                 user_prompt,
+                issue_context=(
+                    owner,
+                    repo,
+                    selected.title,
+                    selected.body or "",
+                    pr_extra or "(not a PR or no patch text available)",
+                ),
                 urlopen=llm_urlopen,
             )
         except LLMError as e:
