@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "secanalyzer"
+version = "0.1.0"
+description = "AI-powered local CLI for codebase security documentation and GitHub issue/PR analysis."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "platformdirs>=4.9.6",
+    "questionary>=2.1.1",
+]
+
+[dependency-groups]
+dev = [
+    "bandit>=1.9.4",
+    "pip-audit>=2.10.0",
+    "pytest>=8.0",
+]
+
+[project.scripts]
+secanalyzer = "secanalyzer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.bandit]
+exclude_dirs = [".venv", "tests", "build", "dist"]
+targets = ["src/secanalyzer"]

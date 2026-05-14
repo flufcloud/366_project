@@ -10,11 +10,13 @@ Point the tool at any repository and it will automatically generate structured d
 
 - [Features](#features)
 - [Prerequisites](#prerequisites)
+- [Development with UV (WSL / Linux)](#development-with-uv-wsl--linux)
 - [Building from Source](#building-from-source)
 - [Installation](#installation)
 - [CI/CD](#cicd)
 - [Token Setup](#token-setup)
 - [Quickstart](#quickstart)
+- [Quickstart guide (step-by-step)](QUICKSTART.md)
 - [CLI Reference](#cli-reference)
 - [Security and Data Handling](#security-and-data-handling)
 - [Troubleshooting](#troubleshooting)
@@ -26,7 +28,7 @@ Point the tool at any repository and it will automatically generate structured d
 
 | Feature | Description |
 |---|---|
-| **Codebase Documentation Engine** | Recursively scans a repository and produces Markdown documentation covering architecture, data flow, and security considerations. |
+| **Codebase Documentation Engine** | Recursively scans a repository and emits Markdown (file index, redacted snippets, and security notes). Narrative enrichment via LLM may be added later. |
 | **Issue & PR Analyzer** | Authenticates with GitHub, presents an interactive menu of open issues and PRs, and classifies each item's security risk with a justification. |
 | **Preliminary Solutions** | For every flagged issue or PR, generates a plain-language suggested fix or direction of investigation. |
 | **Multi-LLM Support** | Choose your own LLM backend — Claude, Gemini, and others are supported. |
@@ -36,122 +38,106 @@ Point the tool at any repository and it will automatically generate structured d
 
 ## Prerequisites
 
-- **OS:** Linux (Ubuntu 20.04+ or Debian 11+ recommended)
-- **Python:** 3.11 or higher
-- **pip:** 23.0 or higher
+- **OS:** Linux (Ubuntu 20.04+ or Debian 11+ recommended), or **WSL2** on Windows for the same workflow
+- **Python:** 3.11 or higher (see [`.python-version`](.python-version))
+- **[uv](https://docs.astral.sh/uv/)** 0.5+ (recommended installer and lockfile manager for this repo)
 - **Git:** Any recent version
-- A **GitHub Personal Access Token** with `repo` scope
-- An API key for your chosen LLM provider (Claude, Gemini, etc.)
+- A **GitHub Personal Access Token** with `repo` scope (for `--issues`)
+- An API key for your chosen LLM provider (**Claude** / **Gemini**) for `--issues`
 
-Verify your Python version before installing:
+Verify Python (after `uv` has installed the project interpreter):
 
 ```bash
-python3 --version
+uv run python --version
 ```
+
+---
+
+## Development with UV (WSL / Linux)
+
+The canonical dev workflow keeps Python and dependencies **inside this repository** via [uv](https://docs.astral.sh/uv/). From the repo root (in WSL, paths look like `/mnt/c/.../366_project`):
+
+```bash
+uv sync --group dev
+uv run pytest
+uv run bandit -r src/secanalyzer
+uv run pip-audit
+uv run secanalyzer --help
+```
+
+Agent-oriented checklists and phase notes live in [AGENTS.md](AGENTS.md).
 
 ---
 
 ## Building from Source
 
-The project uses `pyproject.toml` with `setuptools` as its build backend. This lets you build a proper installable Python package (a `.whl` wheel file) from source, which is what `install.sh` does under the hood. You can also do it manually.
-
-1. **Install the build frontend** (one-time):
+The package is defined in [`pyproject.toml`](pyproject.toml) (setuptools backend). With **uv**:
 
 ```bash
-pip install build --break-system-packages
+uv sync --all-groups
+uv build
 ```
 
-2. **Build the wheel and source distribution:**
-
-```bash
-python3 -m build
-```
-
-This produces two artifacts inside the `dist/` directory:
-
-```
-dist/
-  secanalyzer-0.1.0-py3-none-any.whl   # installable wheel
-  secanalyzer-0.1.0.tar.gz              # source distribution
-```
-
-3. **Install the built wheel into a virtual environment:**
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install --require-hashes -r requirements.txt
-pip install dist/secanalyzer-0.1.0-py3-none-any.whl
-```
-
-4. **Run tests to verify the build is clean:**
-
-```bash
-pytest tests/
-```
-
-> **Note:** The `install.sh` convenience script wraps all of these steps. Use it for a standard first-time setup. Build manually only if you are modifying the package or verifying build reproducibility.
+Wheels and sdist are written to `dist/`. Install into the active environment with `uv pip install dist/secanalyzer-*.whl`, or continue using `uv run secanalyzer` from the project root without a separate install step.
 
 ---
 
 ## Installation
 
-> **Warning:** Always verify dependency hashes before installation (see [Security and Data Handling](#security-and-data-handling)).
-
 1. **Clone the repository:**
 
-```bash
-git clone https://github.com/flufcloud/366_project.git
-cd 366_project
-```
+   ```bash
+   git clone https://github.com/flufcloud/366_project.git
+   cd 366_project
+   ```
 
-2. **Run the install script:**
+2. **Install dependencies and the `secanalyzer` package into a project-local venv** (recommended):
 
-```bash
-chmod +x install.sh
-./install.sh
-```
+   ```bash
+   uv sync --all-groups
+   ```
 
-The install script will create a virtual environment, install all pinned dependencies with hash verification, and place the `secanalyzer` command on your `PATH`.
+   This creates `.venv/` and installs locked runtime + dev dependencies from [`uv.lock`](uv.lock).
 
-3. **Verify the installation:**
+3. **Run the tool** (no global `PATH` change required):
 
-```bash
-secanalyzer --help
-```
+   ```bash
+   uv run secanalyzer --help
+   ```
+
+   Optional: activate the venv and call the console script directly:
+
+   ```bash
+   source .venv/bin/activate   # Linux / WSL
+   secanalyzer --help
+   ```
 
 ---
 
 ## CI/CD
 
-This project uses **GitHub Actions** for continuous integration. The pipeline is defined in `.github/workflows/ci.yml` and is triggered automatically on every push to `main` and on every pull request targeting `main`.
+Continuous integration runs on **every push** and **pull request** to `main` or `master` (see [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
 ### What the pipeline does
 
 | Step | Tool | Purpose |
 |---|---|---|
-| **Install dependencies** | `pip` + `--require-hashes` | Installs pinned, hash-verified dependencies |
-| **Static security analysis** | `bandit` | Scans source code for common Python security issues |
-| **Dependency vulnerability check** | `pip-audit` | Flags dependencies with known CVEs |
-| **Unit tests** | `pytest` | Runs the full test suite |
+| **Locked install** | `uv sync --frozen --all-groups` | Reproducible environment from [`uv.lock`](uv.lock) (runtime + dev) |
+| **Unit tests** | `pytest` | Full test suite |
+| **Static security analysis** | `bandit` | Python source patterns (`src/secanalyzer`) |
+| **Dependency audit** | `pip-audit` | Known CVEs in the resolved environment |
 
 ### Viewing build status
 
-You can check the status of any run in the [Actions tab](https://github.com/flufcloud/366_project/actions) of the repository. A green checkmark on a PR means all four steps passed. Merging is blocked if any step fails.
+Open the **Actions** tab on GitHub for this repository. A green workflow run means all steps passed.
 
-### Running the pipeline locally
-
-You can replicate the CI steps locally before pushing:
+### Running the same checks locally
 
 ```bash
-# Static analysis
-bandit -r secanalyzer/
-
-# Dependency audit
-pip-audit
-
-# Tests
-pytest tests/
+uv sync --frozen --all-groups
+uv run pytest
+uv run bandit -r src/secanalyzer
+uv run pip-audit
 ```
 
 ---
@@ -165,21 +151,21 @@ Credentials are stored in local files and are **never** hard-coded or committed 
    Create a Personal Access Token at [github.com/settings/tokens](https://github.com/settings/tokens) with the `repo` scope, then store it:
 
    ```bash
-   secanalyzer --set-token github
+   uv run secanalyzer --set-token github
    # You will be prompted to paste your token securely
    ```
 
 2. **LLM API Key**
 
    ```bash
-   secanalyzer --set-token llm
-   # You will be prompted to select your provider and paste your key
+   uv run secanalyzer --set-token llm --provider claude
+   # Or: --provider gemini — prompts for API key (hidden)
    ```
 
 3. **Verify all keys are valid:**
 
    ```bash
-   secanalyzer --api-key-status
+   uv run secanalyzer --api-key-status
    ```
 
    Expected output:
@@ -193,16 +179,24 @@ Credentials are stored in local files and are **never** hard-coded or committed 
 
 ## Quickstart
 
+**First-time setup from zero:** follow **[QUICKSTART.md](QUICKSTART.md)** (install uv, `uv sync`, tokens, verify, then run the commands below).
+
 **Generate documentation for a repository:**
 
 ```bash
-secanalyzer --scan /path/to/your/repo
+uv run secanalyzer --scan /path/to/your/repo
+```
+
+Optional: write the Markdown report to a file:
+
+```bash
+uv run secanalyzer --scan /path/to/your/repo -o report.md
 ```
 
 **Fetch and analyze open issues and PRs:**
 
 ```bash
-secanalyzer --issues owner/repo-name
+uv run secanalyzer --issues owner/repo-name
 ```
 
 You will be presented with an interactive menu (navigable with arrow keys and Enter). Select an item to receive its risk classification and a suggested fix.
@@ -213,11 +207,12 @@ You will be presented with an interactive menu (navigable with arrow keys and En
 
 | Flag | Argument | Description |
 |---|---|---|
-| `--scan` | `<path>` | Recursively scan a local repository and generate security documentation. |
+| `--scan` | `<path>` | Recursively scan a local repository and generate security documentation (Markdown). |
+| `-o` / `--output` | `<file>` | With `--scan`, write Markdown to a file instead of stdout. |
 | `--issues` | `<owner/repo>` | Fetch open issues and PRs from GitHub and launch the interactive analyzer. |
-| `--api-key-status` | — | Check whether all configured API keys are present and valid. |
-| `--set-token` | `github \| llm` | Securely store a new credential. |
-| `--provider` | `claude \| gemini \| ...` | Override the default LLM provider for this invocation. |
+| `--api-key-status` | — | Check whether configured API keys are present and valid. |
+| `--set-token` | `github \| llm` | Securely store a new credential (use `--provider` with `llm`). |
+| `--provider` | `claude \| gemini \| anthropic` | With `--set-token llm`, choose vendor. With `--issues`, must match the stored vendor. |
 | `--help` | — | Display usage information. |
 
 All interactive menus are fully keyboard-navigable (↑ ↓ arrow keys, Enter to select, Escape to go back).
@@ -236,7 +231,7 @@ This tool is built with a security-first design. Key guarantees:
 
 - **Prompt injection is mitigated.** All user-controlled text (PR titles, bodies, diffs) is wrapped in a clearly delimited data section of the system prompt, separate from instructions. LLM responses are validated against an expected schema before being acted upon.
 
-- **Dependencies are pinned and hash-verified.** `requirements.txt` pins every dependency to an exact version with a cryptographic hash. The install script uses `pip install --require-hashes` and the CI pipeline runs `pip-audit` on every push.
+- **Dependencies are locked.** Third-party packages are pinned in [`uv.lock`](uv.lock). CI runs `uv sync --frozen --all-groups` and **`pip-audit`** on every push/PR. Review lockfile changes in PRs like any other security-sensitive diff.
 
 For full details on data handling guarantees and how to report a vulnerability, see [SECURITY.md](SECURITY.md).
 
@@ -245,25 +240,32 @@ For full details on data handling guarantees and how to report a vulnerability, 
 ## Troubleshooting
 
 **`command not found: secanalyzer`**
-The install script may not have updated your `PATH`. Run `source ~/.bashrc` (or `~/.zshrc`) and try again, or invoke the tool directly with `python3 -m secanalyzer`.
+
+Use `uv run secanalyzer …` from the project directory, or activate the venv first: `source .venv/bin/activate` (Linux/WSL) then `secanalyzer`. You can also run `uv run python -m secanalyzer`.
 
 **`[ERROR] GitHub token is missing or invalid`**
-Run `secanalyzer --set-token github` to re-enter your token, then verify with `secanalyzer --api-key-status`.
+
+Run `uv run secanalyzer --set-token github` to re-enter your token, then verify with `uv run secanalyzer --api-key-status`.
 
 **`[ERROR] LLM API key is missing or invalid`**
-Run `secanalyzer --set-token llm`. Make sure you selected the correct provider with `--provider`.
+
+Run `uv run secanalyzer --set-token llm --provider claude` (or `gemini`). Use `--api-key-status` to confirm.
 
 **`[WARNING] API unavailable — cannot reach GitHub`**
-Check your internet connection. If the issue persists, GitHub may be experiencing an outage. The tool will not proceed when the API is unreachable.
 
-**`[WARNING] Content redacted before sending to LLM`**
-The pre-send filter detected a potential secret in a file. Review the flagged file and ensure it does not contain real credentials before re-running.
+Check your internet connection. If the issue persists, GitHub may be experiencing an outage.
 
-**Slow documentation generation on large repositories**
-The tool enforces a budget of 100,000 LLM tokens per request. For very large codebases, consider scanning a subdirectory with `--scan /path/to/repo/src` instead of the entire repo root.
+**`[WARNING] Content redacted before sending to LLM`** / **`Aborting LLM request: credential-shaped patterns`**
 
-**Dependency hash mismatch during install**
-Do not proceed. This may indicate a supply chain attack or a corrupted download. Re-clone the repository, verify the `requirements.txt` hashes against the values in this README's release notes, and open an issue if the mismatch persists.
+The pre-send filter or scan redactor detected patterns that look like secrets. Remove real credentials from the issue/PR or scanned tree, or reduce included PR diff size, then retry.
+
+**Slow or truncated context on large repositories / PRs**
+
+The tool targets an estimated **100,000 LLM tokens per request** (M2). Use `--scan` on a subdirectory if needed; PR patch text is already truncated server-side.
+
+**`uv sync --frozen` fails after pulling**
+
+The lockfile may be out of date relative to `pyproject.toml`. A maintainer should run `uv lock` and commit the updated `uv.lock`. Do not hand-edit locked versions without verifying sources.
 
 ---
 
