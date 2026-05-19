@@ -74,6 +74,112 @@ class WorkItem:
     author_login: str
 
 
+@dataclass(frozen=True)
+class IssueComment:
+    author_login: str
+    body: str
+    created_at: str
+
+
+def _work_item_from_api_row(row: dict[str, Any]) -> WorkItem | None:
+    num = row.get("number")
+    if not isinstance(num, int):
+        return None
+    pr = row.get("pull_request")
+    is_pr = isinstance(pr, dict)
+    title = row.get("title") or ""
+    body = row.get("body") or ""
+    if not isinstance(title, str):
+        title = str(title)
+    if not isinstance(body, str):
+        body = str(body) if body is not None else ""
+    html_url = row.get("html_url") or ""
+    if not isinstance(html_url, str):
+        html_url = str(html_url)
+    user = row.get("user")
+    author = "unknown"
+    if isinstance(user, dict):
+        login = user.get("login")
+        if isinstance(login, str):
+            author = login
+    return WorkItem(
+        number=num,
+        title=title,
+        body=body,
+        html_url=html_url,
+        is_pull_request=is_pr,
+        author_login=author,
+    )
+
+
+def fetch_work_item(
+    owner: str,
+    repo: str,
+    number: int,
+    token: str,
+    *,
+    urlopen: Callable[..., Any] | None = None,
+) -> WorkItem:
+    """Fetch one issue or PR by number."""
+    url = f"https://api.github.com/repos/{owner}/{repo}/issues/{number}"
+    data = github_json_request(url, token, urlopen=urlopen)
+    if not isinstance(data, dict):
+        raise GitHubApiError("Unexpected GitHub issue payload (expected an object).")
+    item = _work_item_from_api_row(data)
+    if item is None:
+        raise GitHubApiError(f"Could not parse GitHub issue #{number}.")
+    return item
+
+
+def fetch_issue_comments(
+    owner: str,
+    repo: str,
+    number: int,
+    token: str,
+    *,
+    urlopen: Callable[..., Any] | None = None,
+    max_pages: int = 5,
+) -> list[IssueComment]:
+    """Issue/PR discussion comments (chronological)."""
+    out: list[IssueComment] = []
+    for page in range(1, max_pages + 1):
+        qs = urllib.parse.urlencode({"per_page": "100", "page": str(page)})
+        url = (
+            f"https://api.github.com/repos/{owner}/{repo}/issues/"
+            f"{number}/comments?{qs}"
+        )
+        data = github_json_request(url, token, urlopen=urlopen)
+        if not isinstance(data, list):
+            raise GitHubApiError("Unexpected GitHub comments payload (expected a list).")
+        if not data:
+            break
+        for row in data:
+            if not isinstance(row, dict):
+                continue
+            user = row.get("user")
+            author = "unknown"
+            if isinstance(user, dict):
+                login = user.get("login")
+                if isinstance(login, str):
+                    author = login
+            body = row.get("body") or ""
+            if not isinstance(body, str):
+                body = str(body) if body is not None else ""
+            created = row.get("created_at") or ""
+            if not isinstance(created, str):
+                created = str(created) if created is not None else ""
+            out.append(
+                IssueComment(
+                    author_login=author,
+                    body=body,
+                    created_at=created,
+                ),
+            )
+        if len(data) < 100:
+            break
+    return out
+
+
 def list_open_work_items(
     owner: str,
     repo: str,
@@ -103,36 +209,9 @@ def list_open_work_items(
         for row in data:
             if not isinstance(row, dict):
                 continue
-            num = row.get("number")
-            if not isinstance(num, int):
-                continue
-            pr = row.get("pull_request")
-            is_pr = isinstance(pr, dict)
-            title = row.get("title") or ""
-            body = row.get("body") or ""
-            if not isinstance(title, str):
-                title = str(title)
-            if not isinstance(body, str):
-                body = str(body) if body is not None else ""
-            html_url = row.get("html_url") or ""
-            if not isinstance(html_url, str):
-                html_url = str(html_url)
-            user = row.get("user")
-            author = "unknown"
-            if isinstance(user, dict):
-                login = user.get("login")
-                if isinstance(login, str):
-                    author = login
-            items.append(
-                WorkItem(
-                    number=num,
-                    title=title,
-                    body=body,
-                    html_url=html_url,
-                    is_pull_request=is_pr,
-                    author_login=author,
-                ),
-            )
+            item = _work_item_from_api_row(row)
+            if item is not None:
+                items.append(item)
         if len(data) < 100:
             break
     return items

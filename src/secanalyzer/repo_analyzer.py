@@ -61,6 +61,9 @@ SKIP_DIR_NAMES = frozenset({
     ".tox",
     "dist",
     "build",
+    "_build",
+    ".next",
+    "coverage",
     ".ruff_cache",
     ".idea",
     ".vscode",
@@ -285,6 +288,7 @@ def report_to_markdown(
     report: ScanReport,
     *,
     include_full_file_snippets: bool = False,
+    bandit_section: str | None = None,
 ) -> str:
     """Emit deterministic Markdown: metadata, overview, optional warnings, file index.
 
@@ -307,11 +311,14 @@ def report_to_markdown(
     lines.append("")
     lines.append(
         "This section is a **deterministic inventory** from allowlisted source files "
-        "(counts, paths, redaction totals). A **concise LLM narrative** is appended "
-        "when LLM credentials are configured (`--set-token llm`); otherwise only this "
-        "inventory is emitted (no full-repo code dump).",
+        "(counts, paths, redaction totals), plus **Bandit** static analysis on Python "
+        "when available. For an LLM-written security narrative, run "
+        "`secanalyzer --llm-report PATH` after configuring LLM credentials.",
     )
     lines.append("")
+    if bandit_section:
+        lines.append(bandit_section.rstrip())
+        lines.append("")
     if report.warnings:
         lines.append("## Warnings")
         lines.append("")

@@ -50,57 +50,15 @@ def test_render_markdown() -> None:
     assert "`p.py`" in md
 
 
-def test_run_interactive_issues_mocked(
+def test_run_interactive_issues_deprecated_lists(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SECANALYZER_CONFIG_DIR", str(tmp_path))
     (tmp_path / "github_token").write_text("ghp_" + "z" * 36 + "\n", encoding="utf-8")
-    (tmp_path / "llm_credentials.json").write_text(
-        '{"provider":"claude","api_key":"sk-ant-api03-' + "q" * 24 + '"}',
-        encoding="utf-8",
-    )
-
-    items = [
-        WorkItem(
-            number=1,
-            title="Hi",
-            body="Body",
-            html_url="https://example/1",
-            is_pull_request=False,
-            author_login="a",
-        ),
-    ]
-
-    def fake_list(*a: object, **k: object) -> list[WorkItem]:
-        return items
-
-    analysis = {
-        "risk_level": "low",
-        "justification": "ok",
-        "code_locations": [],
-        "suggested_mitigation": "patch",
-    }
-
-    def fake_llm(*a: object, **k: object) -> tuple[dict, list]:
-        return analysis, []
-
     monkeypatch.setattr(
         "secanalyzer.issues_session.list_open_work_items",
-        fake_list,
+        lambda *_a, **_k: [],
     )
-    monkeypatch.setattr(
-        "secanalyzer.issues_session.llm_mod.complete_issue_analysis",
-        fake_llm,
-    )
-
-    calls: list[WorkItem | None] = [items[0], None]
-
-    def fake_select(_its: list[WorkItem]) -> WorkItem | None:
-        return calls.pop(0)
-
-    code = run_interactive_issues(
-        "o/r",
-        select_work_item=fake_select,
-    )
+    code = run_interactive_issues("o/r")
     assert code == 0

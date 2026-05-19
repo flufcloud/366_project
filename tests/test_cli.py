@@ -16,6 +16,21 @@ def test_build_parser_prog():
     assert p.prog == "secanalyzer"
 
 
+def test_set_google_model_cli(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SECANALYZER_CONFIG_DIR", str(tmp_path))
+    (tmp_path / "llm_credentials.json").write_text(
+        '{"provider":"gemini","api_key":"AIza' + "0" * 35 + '"}',
+        encoding="utf-8",
+    )
+    buf_err = StringIO()
+    with redirect_stderr(buf_err):
+        code = cli.main(["--set-google-model", "gemini-2.5-flash"])
+    assert code == 0
+    from secanalyzer import config
+
+    assert config.load_google_model() == "gemini-2.5-flash"
+
+
 def test_help_exits_zero():
     buf_out = StringIO()
     buf_err = StringIO()
@@ -43,10 +58,10 @@ def test_no_args_prints_help_and_zero():
         code = cli.main([])
     assert code == 0
     out = buf_out.getvalue()
-    assert "--scan" in out and "--issues" in out
+    assert "--scan" in out and "--list-issues" in out and "--llm-report" in out
 
 
-def test_scan_with_llm_narrative_mocked(
+def test_llm_report_mocked(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -62,27 +77,29 @@ def test_scan_with_llm_narrative_mocked(
     )
 
     def fake_gen(
-        prov: str,
-        key: str,
-        inv: str,
+        provider: str,
+        api_key: str,
+        report: object,
         *,
         urlopen=None,
+        progress=None,
+        report_tree=None,
     ) -> tuple[str, list[str]]:
-        assert "a.py" in inv
-        return "## Executive summary\n\nMock narrative.\n", []
+        if progress:
+            progress("mock step")
+        return "# LLM security report\n\n## Executive summary\n\nDone.\n", []
 
     monkeypatch.setattr(
-        "secanalyzer.llm.generate_repo_scan_markdown",
+        "secanalyzer.scan_llm.generate_llm_security_report",
         fake_gen,
     )
-    out_md = tmp_path / "out.md"
+    out_md = tmp_path / "llm.md"
     buf_err = StringIO()
     with redirect_stderr(buf_err):
-        code = cli.main(["--scan", str(repo), "-o", str(out_md)])
+        code = cli.main(["--llm-report", str(repo), "-o", str(out_md)])
     assert code == 0
-    text = out_md.read_text(encoding="utf-8")
-    assert "LLM security narrative" in text
-    assert "Mock narrative" in text
+    assert "Executive summary" in out_md.read_text(encoding="utf-8")
+    assert "mock step" in buf_err.getvalue()
 
 
 def test_scan_writes_markdown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -98,7 +115,7 @@ def test_scan_writes_markdown(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
     text = out_md.read_text(encoding="utf-8")
     assert "Repository security scan" in text
     assert "hello.py" in text
-    assert "LLM narrative omitted" in text
+    assert "--llm-report" in text
     assert "## Snippets" not in text
     assert 'print("hi")' not in text
 
@@ -141,6 +158,23 @@ def test_test_llm_missing_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     assert "not configured" in buf_err.getvalue().lower()
 
 
+def test_list_google_models_ok_mocked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SECANALYZER_CONFIG_DIR", str(tmp_path))
+    (tmp_path / "llm_credentials.json").write_text(
+        '{"provider":"gemini","api_key":"AIza' + "0" * 35 + '"}',
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(
+        "secanalyzer.llm.list_google_generate_content_models",
+        lambda *_a, **_k: ["gemma-3-27b-it", "gemini-2.5-flash"],
+    )
+    buf_out = StringIO()
+    with redirect_stdout(buf_out):
+        code = cli.main(["--list-google-models"])
+    assert code == 0
+    assert "gemma-3-27b-it" in buf_out.getvalue()
+
+
 def test_test_llm_ok_mocked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("SECANALYZER_CONFIG_DIR", str(tmp_path))
     (tmp_path / "llm_credentials.json").write_text(
@@ -166,36 +200,67 @@ def test_test_llm_ok_mocked(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     assert "[OK]" in buf_out.getvalue() and "claude" in buf_out.getvalue()
 
 
-def test_issues_requires_github_token(
+def test_list_issues_requires_github_token(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("SECANALYZER_CONFIG_DIR", str(tmp_path))
     buf_err = StringIO()
     with redirect_stderr(buf_err):
-        code = cli.main(["--issues", "o/r"])
+        code = cli.main(["--list-issues", "o/r"])
     assert code == 1
     assert "GitHub token missing" in buf_err.getvalue()
 
 
-def test_issues_cli_dispatches_session(
+def test_list_issues_cli_dispatches(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    called: dict[str, str] = {}
+
+    def fake_run(owner_repo: str, **kwargs: object) -> int:
+        called["owner_repo"] = owner_repo
+        return 0
+
+    monkeypatch.setattr(
+        "secanalyzer.issues_session.run_list_issues",
+        fake_run,
+    )
+    code = cli.main(["--list-issues", "octo/Hello-World"])
+    assert code == 0
+    assert called.get("owner_repo") == "octo/Hello-World"
+
+
+def test_analyze_issue_cli_dispatches(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     called: dict[str, object] = {}
 
-    def fake_run(owner_repo: str, **kwargs: object) -> int:
+    def fake_analyze(owner_repo: str, number: int, **kwargs: object) -> tuple[str, list]:
         called["owner_repo"] = owner_repo
+        called["number"] = number
         called["kwargs"] = kwargs
-        return 0
+        return "## Risk level\n\nlow\n", []
 
     monkeypatch.setattr(
-        "secanalyzer.issues_session.run_interactive_issues",
-        fake_run,
+        "secanalyzer.issues_session.run_analyze_issue",
+        fake_analyze,
     )
-    code = cli.main(["--issues", "octo/Hello-World", "--provider", "claude"])
+    buf_out = StringIO()
+    with redirect_stdout(buf_out):
+        code = cli.main(
+            [
+                "--analyze-issue",
+                "octo/Hello-World",
+                "--issue-number",
+                "3",
+                "--provider",
+                "claude",
+            ],
+        )
     assert code == 0
-    assert called.get("owner_repo") == "octo/Hello-World"
+    assert called.get("number") == 3
     kw = called.get("kwargs") or {}
     assert kw.get("provider_override") == "claude"
 

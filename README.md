@@ -43,8 +43,8 @@ Point the tool at any repository and it will automatically generate structured d
 - **Python:** 3.11 or higher (see [`.python-version`](.python-version))
 - **[uv](https://docs.astral.sh/uv/)** 0.5+ (recommended installer and lockfile manager for this repo)
 - **Git:** Any recent version
-- A **GitHub Personal Access Token** with `repo` scope (for `--issues`)
-- An API key for your chosen LLM provider (**Claude** / **Gemini**) for `--issues`
+- A **GitHub Personal Access Token** with `repo` scope (for `--list-issues` / `--analyze-issue`)
+- An API key for your chosen LLM provider (**Claude** / **Gemini**) for `--analyze-issue`
 
 Verify Python (after `uv` has installed the project interpreter):
 
@@ -182,25 +182,43 @@ Credentials are stored in local files and are **never** hard-coded or committed 
 
 **First-time setup from zero:** follow **[QUICKSTART.md](QUICKSTART.md)** (install uv, `uv sync`, tokens, verify, then run the commands below).
 
-**Generate documentation for a repository:**
+**Static scan (inventory only, no LLM):**
 
 ```bash
 uv run secanalyzer --scan /path/to/your/repo
+uv run secanalyzer --scan /path/to/your/repo -o static-report.md
 ```
 
-Optional: write the Markdown report to a file:
+**LLM security report (per-file analysis, unified narrative):**
 
 ```bash
-uv run secanalyzer --scan /path/to/your/repo -o report.md
+uv run secanalyzer --llm-report /path/to/your/repo -o llm-report.md
 ```
 
-**Fetch and analyze open issues and PRs:**
+Requires `secanalyzer --set-token llm`. Progress is printed to stderr.
+
+**List open issues and PRs (non-interactive):**
 
 ```bash
-uv run secanalyzer --issues owner/repo-name
+uv run secanalyzer --list-issues owner/repo-name
 ```
 
-You will be presented with an interactive menu (navigable with arrow keys and Enter). Select an item to receive its risk classification and a suggested fix.
+**Analyze one issue or PR (brief security overview):**
+
+```bash
+uv run secanalyzer --analyze-issue owner/repo-name --issue-number 42
+uv run secanalyzer --analyze-issue owner/repo-name --issue-number 42 -o issue-42.md
+```
+
+By default the model sees the issue title, body, and comment thread (plus a truncated PR diff when applicable). To augment with codebase context from a prior `--llm-report` artifact tree:
+
+```bash
+uv run secanalyzer --analyze-issue owner/repo --issue-number 42 \
+  --report-context ./my-repo-llm-report \
+  --report-scope apps/api
+```
+
+`--report-scope` selects the nearest `compaction/by-directory/<scope>/*-rolling-summary.md` (walking up parents). If omitted, the tool uses `compaction/final-rolling-summary.md` or infers a scope from PR file paths.
 
 ---
 
@@ -208,15 +226,18 @@ You will be presented with an interactive menu (navigable with arrow keys and En
 
 | Flag | Argument | Description |
 |---|---|---|
-| `--scan` | `<path>` | Recursively scan a local repository and generate security documentation (Markdown). |
-| `-o` / `--output` | `<file>` | With `--scan`, write Markdown to a file instead of stdout. |
-| `--issues` | `<owner/repo>` | Fetch open issues and PRs from GitHub and launch the interactive analyzer. |
+| `--scan` | `<path>` | Static repository scan (Markdown inventory only; no LLM). |
+| `--llm-report` | `<path>` | LLM security report: one file per request, compact context, synthesize Markdown. |
+| `-o` / `--output` | `<file>` | With `--scan`, `--llm-report`, or `--analyze-issue`, write Markdown to a file. |
+| `--list-issues` | `<owner/repo>` | List open issues and PRs (Markdown table to stdout). |
+| `--analyze-issue` | `<owner/repo>` | LLM brief security overview for one item (requires `--issue-number`). |
+| `--issue-number` | `N` | Issue or PR number (with `--analyze-issue`). |
+| `--report-context` | `<dir>` | `--llm-report` artifact tree for rolling codebase context. |
+| `--report-scope` | `<path>` | Repo-relative directory for directory-level rolling summary (with `--report-context`). |
 | `--api-key-status` | — | Check whether configured API keys are present and valid. |
 | `--set-token` | `github \| llm` | Securely store a new credential (use `--provider` with `llm`). |
-| `--provider` | `claude \| gemini \| anthropic` | With `--set-token llm`, choose vendor. With `--issues`, must match the stored vendor. |
+| `--provider` | `claude \| gemini \| anthropic` | With `--set-token llm` or `--analyze-issue`, choose or match vendor. |
 | `--help` | — | Display usage information. |
-
-All interactive menus are fully keyboard-navigable (↑ ↓ arrow keys, Enter to select, Escape to go back).
 
 ---
 
@@ -269,7 +290,9 @@ Check your internet connection. If the issue persists, GitHub may be experiencin
 
 **LLM rate limits or strict per-request token caps**
 
-Set `SECANALYZER_LLM_MAX_USER_TOKENS` to a small positive value (estimated tokens for the **user** message, e.g. `1000`). Issue/PR text is **compressed** (line caps, blank-line trimming) and large patches are **summarized in multiple smaller requests** before the final JSON triage. Scan narratives use the same budget and may digest the inventory in stages. Optional: `SECANALYZER_LLM_BATCH_DELAY_SEC` (default `0.65`) adds a pause between batch calls to ease RPM limits.
+The default Google model is **Gemma 3** (`gemma-3-12b-it`) on the same AI Studio API key as Gemini. Override with `SECANALYZER_GEMMA_MODEL` (e.g. `gemma-3-4b-it`, `gemma-3-27b-it`) or `SECANALYZER_GEMINI_MODEL` for Gemini. Gemma still has RPM/RPD limits on free tiers (often more generous than Gemini Flash daily caps).
+
+Set `SECANALYZER_LLM_MAX_USER_TOKENS` for smaller per-request payloads. For large `--llm-report` runs, use `SECANALYZER_LLM_BATCH_DELAY_SEC` (default `0.65`) and optionally `SECANALYZER_LLM_MAX_FILES`.
 
 **`[WARNING] Content redacted before sending to LLM`** / **`Aborting LLM request: credential-shaped patterns`**
 

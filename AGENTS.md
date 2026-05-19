@@ -12,7 +12,7 @@ Living notes for humans and coding agents. **Update this file** as phases comple
 | [src/secanalyzer/exceptions.py](src/secanalyzer/exceptions.py) | `UserFacingError`, `GitHubApiError`, `LLMError`, etc. (CLI → stderr, no tracebacks) |
 | [tests/](tests/) | `pytest` suite |
 | [SECURITY.md](SECURITY.md) | Vulnerability reporting + data-handling guarantees |
-| [QUICKSTART.md](QUICKSTART.md) | Step-by-step: install, tokens, `--scan`, `--issues` |
+| [QUICKSTART.md](QUICKSTART.md) | Step-by-step: install, tokens, `--scan`, `--list-issues`, `--analyze-issue` |
 | [docs/TECHNICAL_REPORT.md](docs/TECHNICAL_REPORT.md) | Architecture, data flows, engineering decisions (presentation-oriented) |
 | [docs/SECURITY_REPORT.md](docs/SECURITY_REPORT.md) | Threat catalog ↔ mitigations ↔ code/CI mapping |
 | [M2_Agile_Requirements.md](M2_Agile_Requirements.md) | MVP, NFRs, acceptance criteria |
@@ -54,7 +54,13 @@ If `SECANALYZER_CONFIG_DIR` is set to a directory path, credentials are read/wri
 | Environment variable | Default | Purpose |
 |------------------------|---------|---------|
 | `SECANALYZER_ANTHROPIC_MODEL` | `claude-3-5-haiku-20241022` | Anthropic Messages API model id |
-| `SECANALYZER_GEMINI_MODEL` | `gemini-2.0-flash` | Gemini `generateContent` model id |
+| `SECANALYZER_GEMMA_MODEL` / `SECANALYZER_GEMINI_MODEL` | `gemma-3-27b-it` | Google AI `generateContent` model id (Gemma 3 IT or Gemini; same API key). Run `secanalyzer --list-google-models` if you get HTTP 404. Examples: `gemma-3-27b-it`, `gemini-2.5-flash`. |
+| `SECANALYZER_LLM_COMPACT_EVERY` | `8` | After N per-file analyses, compact rolling context (`--llm-report`) |
+| `SECANALYZER_LLM_FILE_MAX_USER_TOKENS` | (same as global budget) | Per-file user-message cap for `--llm-report` |
+| `SECANALYZER_LLM_MAX_FILES` | (unset) | Optional cap on files analyzed in one `--llm-report` run |
+| `SECANALYZER_LLM_ROLLING_MAX_TOKENS` | `2500` | Max estimated tokens kept in rolling summary between compactions |
+| `SECANALYZER_LLM_COMPACT_BATCH_MAX_TOKENS` | `3500` | Max tokens for one compaction batch JSON (typically ≤8 files) |
+| `SECANALYZER_LLM_COMPACT_MAX_USER_TOKENS` | `8000` | User-message cap for compaction + final synthesis calls |
 
 ## Phase checklist
 
@@ -73,7 +79,7 @@ If `SECANALYZER_CONFIG_DIR` is set to a directory path, credentials are read/wri
 
 ### Phase 3 — GitHub + LLM
 
-- [x] `--issues`, questionary UI, Anthropic/Gemini, M2/M3 controls
+- [x] `--list-issues`, `--analyze-issue`, Anthropic/Gemini, optional `--llm-report` tree context
 
 ### Phase 4 — CI + docs (current)
 

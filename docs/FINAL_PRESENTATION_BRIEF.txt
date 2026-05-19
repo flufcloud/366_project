@@ -1,0 +1,423 @@
+SECANALYZER — FINAL RELEASE PRESENTATION BRIEF
+Plain-text input for slide generation (technical team / technical writers audience)
+Author: Siddhu Bhimireddy
+Repository: https://github.com/flufcloud/366_project
+Issue board: https://github.com/users/flufcloud/projects/2/views/1
+Course context: CSC 366 / security-focused CLI capstone — final release and 15-minute demo
+
+
+================================================================================
+1. ELEVATOR PITCH (USE ON TITLE / PROBLEM SLIDE)
+================================================================================
+
+secanalyzer is a local command-line tool for Linux (and WSL) that helps developers and security engineers understand an unfamiliar codebase and prioritize GitHub security work — without running a cloud service of your own.
+
+The user points the tool at a folder on disk and/or a GitHub repository. The tool produces Markdown documentation, optional AI-assisted security narratives, and interactive triage of open issues and pull requests with risk labels (low / medium / high) plus suggested mitigations.
+
+Everything runs on the engineer’s machine except explicit API calls the user authorizes: GitHub REST (for issues/PRs) and a user-chosen LLM vendor (Anthropic Claude or Google Gemini/Gemma via AI Studio).
+
+There is no secanalyzer server, no database, and no telemetry. Secrets stay in local config files and are never intentionally printed to the terminal or embedded in prompts.
+
+
+================================================================================
+2. WHO THIS IS FOR (AUDIENCE SLIDE)
+================================================================================
+
+Primary users:
+- Developers onboarding to a new repository who need architecture and security context quickly.
+- Security engineers who need to rank which GitHub issues or PRs deserve human review first.
+- Technical writers who may transform structured Markdown outputs into customer-facing or internal documentation (the tool outputs clear sections, file paths, and checklists — not raw code dumps by default).
+
+Not the audience for the tool itself:
+- Non-technical end users (no GUI; terminal only).
+- Organizations that forbid sending any code snippets to external LLM vendors (the LLM features are optional; static scan works offline).
+
+
+================================================================================
+3. PROBLEM STATEMENT (WHY BUILD THIS)
+================================================================================
+
+Modern codebases are large, polyglot, and distributed across many services. Manual security review does not scale.
+
+Teams struggle with:
+- Understanding architecture and trust boundaries in a repo they did not write.
+- Deciding which of dozens of open PRs/issues are security-relevant.
+- Avoiding accidental leakage of tokens or secrets into AI tools.
+- Keeping review workflows local and auditable rather than uploading entire repos to unknown SaaS scanners.
+
+secanalyzer addresses these by combining deterministic local scanning (rules, allowlists, redaction) with bounded, policy-aware LLM calls and a keyboard-driven GitHub triage UI.
+
+
+================================================================================
+4. MVP FEATURES (MAP TO COURSE REQUIREMENTS — THREE PILLARS)
+================================================================================
+
+FEATURE 1 — Codebase documentation engine
+- Command: secanalyzer --scan PATH
+- Recursively walks a repository under strict safety rules.
+- Produces Markdown: file inventory, extensions, sizes, redaction warnings, bounded snippets — not a full source dump by default.
+- Optional: secanalyzer --llm-report PATH for deep per-file AI review and a unified security report.
+
+FEATURE 2 — Issue and PR analyzer
+- Command: secanalyzer --issues owner/repo
+- Uses stored GitHub personal access token.
+- Fetches open issues and pull requests.
+- Interactive terminal menu (arrow keys, Enter, Escape) via questionary library.
+- User selects one item at a time for analysis.
+
+FEATURE 3 — Preliminary solutions / mitigations
+- For each analyzed issue or PR, the LLM returns: risk level, justification, code locations (path + line range), and suggested mitigation.
+- Output is validated against a fixed JSON schema before display — reduces garbage and some prompt-injection impact.
+- Rendered as readable Markdown sections on stdout.
+
+
+================================================================================
+5. SYSTEM SHAPE (ONE SLIDE — “NO SERVER”)
+================================================================================
+
+Deployment model: single-user CLI application (Python 3.11+).
+
+Trust boundaries:
+- Trusted: user’s laptop, local filesystem, local credential files.
+- External: GitHub REST API, LLM vendor API (Anthropic or Google).
+
+Components live in src/secanalyzer/ as a standard Python package installed via uv.
+
+Entry points:
+- Console script: secanalyzer
+- Module: python -m secanalyzer
+
+Outputs:
+- Markdown to stdout or -o FILE
+- Progress and warnings to stderr
+- Optional hierarchical artifact directory for --llm-report (see section 8)
+
+
+================================================================================
+6. ARCHITECTURE — SIX CORE COMPONENTS (DESIGN DOCUMENT A1–A6 ALIGNMENT)
+================================================================================
+
+Present these as boxes with arrows; matches M3 threat-model surface IDs.
+
+A1 / CLI Interface — cli.py
+- argparse routing for all commands.
+- Converts internal exceptions to short user-facing messages (no stack traces to end users).
+- Exit codes: success, user error, keyboard interrupt.
+
+A2 / ConfigManager — config.py
+- Stores GitHub PAT and LLM credentials under user config directory.
+- SECANALYZER_CONFIG_DIR override for automated tests only.
+- --set-token with getpass (hidden input).
+- --api-key-status validates GitHub token live; LLM key format check + optional --test-llm ping.
+
+A3 / RepositoryAnalyzer — repo_analyzer.py
+- Canonical path resolution; refuse files outside scan root (path traversal defense).
+- os.walk with followlinks=False.
+- Skip noisy dirs: .git, node_modules, .venv, _build, dist, etc.
+- Extension allowlist (.py, .js, .ts, .go, .md, .yaml, …).
+- UTF-8 text only; skip binary.
+- Regex redaction for secrets (GitHub PAT shapes, API keys, etc.) before reporting or LLM send.
+- MAX_SNIPPET_BYTES cap per file.
+
+A4 / GitHub API Client — github_client.py
+- Paginated list of open issues and PRs.
+- PR file list + patch text with hard byte caps (per file and total) so one huge PR cannot blow memory or tokens.
+
+A5 / LLM Orchestration — llm.py (+ scan_llm.py for repository reports)
+- Builds prompts with explicit delimiter blocks around untrusted content.
+- Estimated token budget (~100k per request design goal) with truncation warnings.
+- Pre-send filter: abort LLM request if credential-like patterns remain in outbound text (issues path).
+- Redaction instead of abort for per-file scan path where possible.
+- Supports Anthropic Messages API and Google generateContent (Gemini or Gemma models).
+- Retries on HTTP 429/503 and HTTP 500 with configurable waits.
+- Map-reduce for oversized issue patches and scan inventories.
+
+A6 / Output & session glue — output.py, issues_session.py
+- UTF-8 file write for reports.
+- questionary menu loop; renders validated JSON analysis as Markdown sections.
+
+Additional modules (final release):
+- scan_llm.py — full --llm-report pipeline (per-file analysis, rolling compaction, final synthesis, degraded fallback).
+- report_tree.py — writes hierarchical artifact tree mirroring repo structure.
+- exceptions.py — UserFacingError, LLMError, GitHubApiError, ScanError.
+
+
+================================================================================
+7. THREE MAIN USER JOURNEYS (DEMO FLOW OPTIONS)
+================================================================================
+
+JOURNEY A — Static scan only (no LLM, fast, safe demo)
+1. uv sync --all-groups
+2. secanalyzer --scan ./demo-repo -o static.md
+3. Show: file table, redaction warning if test repo contains fake secrets, no network.
+
+JOURNEY B — GitHub issue triage (needs tokens)
+1. secanalyzer --set-token github
+2. secanalyzer --set-token llm --provider claude   (or gemini)
+3. secanalyzer --api-key-status
+4. secanalyzer --issues owner/repo
+5. Select one issue or PR; show risk level + mitigation + file references.
+
+JOURNEY C — LLM security report (needs LLM token; slower)
+1. secanalyzer --llm-report ./demo-repo -o report.md --report-dir ./report-tree
+2. Explain stderr progress: [1/N] per file, compaction passes, synthesis.
+3. Open report-tree/: files/ per-source reviews, compaction/ rolling summaries, synthesis/final-report.md.
+
+
+================================================================================
+8. LLM REPORT PIPELINE (IMPORTANT FOR ARCHITECTURE SLIDE — --llm-report)
+================================================================================
+
+This is the most sophisticated flow; separate from lightweight --scan.
+
+Phase 1 — Local index
+- Same RepositoryAnalyzer walk as --scan.
+- Determine “analyzable” text files (skip lockfiles: package-lock.json, uv.lock, etc.).
+
+Phase 2 — Per-file analysis (one LLM call per file)
+- Each file sent in isolation with delimiter-wrapped source.
+- Model returns plain-text security notes (attack surface, role, findings, review focus).
+- Parsed best-effort; stored in memory and optionally written to report-tree/files/<path>.md.
+
+Phase 3 — Rolling compaction (every N files, default N=8)
+- Batches of per-file notes merged into a rolling architecture summary.
+- If context too large: batch split recursively (binary split) until each call fits.
+- Each pass saved under report-tree/compaction/sequential/ and compaction/by-directory/.
+
+Phase 4 — Final synthesis
+- Rolling summary + highest attack-surface file notes → unified Markdown report.
+- Required sections: Executive summary; Architecture and trust boundaries; High attack-surface files; Broader codebase themes; Recommended review checklist.
+- If single pass fails: chunked map-reduce + merge partials.
+- Strict prompt + validation to avoid “planning text” instead of final report.
+- HTTP 500: up to 30 retries per request + 30 step-level retries (configurable).
+
+Phase 5 — Deliverable
+- REPORT.md in artifact tree; -o file for user-facing copy; processing notes section lists warnings.
+
+Environment knobs (mention as “operational tuning” slide or appendix):
+SECANALYZER_LLM_COMPACT_EVERY, SECANALYZER_LLM_ROLLING_MAX_TOKENS, SECANALYZER_LLM_BATCH_DELAY_SEC, SECANALYZER_LLM_SERVER_ERROR_MAX_RETRIES, SECANALYZER_GEMINI_MODEL, etc.
+
+
+================================================================================
+9. SECURITY STORY (CORE FOR FINAL RELEASE — FIVE CATALOGED THREATS)
+================================================================================
+
+Use a table slide: Threat | What we do | Residual risk
+
+THREAT 1 — Prompt injection via GitHub issue/PR text
+- Mitigation: delimiter blocks marking untrusted data; system instructions treat that region as inert; JSON schema validation on responses for --issues.
+- Residual: LLMs can still be biased; not cryptographically enforceable.
+
+THREAT 2 — Credential leakage to logs or LLM prompts
+- Mitigation: getpass entry; keys only in HTTP headers; pre-send regex scan aborts LLM call if secrets detected in full prompt; UserFacingError without secrets in messages.
+- Residual: compromised host reads config files; regex misses novel secret formats.
+
+THREAT 3 — Path traversal / shell injection from malicious repo
+- Mitigation: resolve root; relative_to check; no shell invocation for scan; no symlink follow on walk.
+- Residual: exotic FS edge cases; analyze untrusted repos in VM.
+
+THREAT 4 — Exfiltration of sensitive code to LLM vendor
+- Mitigation: extension allowlist; snippet caps; token budgets; redaction; --scan does not send full tree by default; SECURITY.md documents what crosses boundary.
+- Residual: proprietary logic without “secret” syntax still sent if user runs LLM features; vendor retention policies apply.
+
+THREAT 5 — Supply chain / dependency attacks
+- Mitigation: uv.lock pinned; CI runs uv sync --frozen, pytest, bandit, pip-audit on every push/PR to main.
+- Residual: lockfile tampering in PR; zero-days in dependencies.
+
+Attack surface IDs for diagram (M3):
+A1 CLI args, A2 repo files, A3 GitHub content, A4 prompt assembly, A5 model response display, A6 credential storage.
+
+
+================================================================================
+10. DATA THAT LEAVES THE MACHINE (TRANSPARENCY SLIDE — TECH WRITERS CARE)
+================================================================================
+
+Never sent by design:
+- Raw GitHub token or LLM API key in prompt bodies.
+- Full repository as a single dump in default modes.
+
+May be sent when user runs LLM features:
+- Truncated/redacted file snippets (--llm-report: one file per request).
+- GitHub issue/PR title, body, truncated patch hunks (--issues).
+- Rolling summaries derived from prior analysis (compaction/synthesis).
+
+User controls:
+- Choose not to configure LLM → only local --scan.
+- Choose provider (Claude vs Google) and model id via environment variables.
+- Read stderr warnings when content redacted or truncated.
+
+
+================================================================================
+11. DEVELOPMENT ENVIRONMENT AND ENGINEERING PROCESS (M4 BETA / FINAL)
+================================================================================
+
+Source control: GitHub git repository (flufcloud/366_project).
+
+Issue tracking: GitHub Projects board (sprints, backlog, static analysis findings).
+
+Build tool: uv (Astral) — not Gradle; Python packaging via pyproject.toml + uv.lock.
+- uv sync --all-groups installs dev + runtime deps into .venv/
+- uv build produces wheel/sdist in dist/
+
+CI/CD: GitHub Actions workflow .github/workflows/ci.yml
+- Triggers: push and pull_request to main or master.
+- Steps: checkout → setup-uv → uv sync --frozen --all-groups → pytest → bandit -r src/secanalyzer → pip-audit.
+- Green CI = tests + static security + dependency audit passed.
+
+Testing: pytest (~80+ tests), including mocked HTTP (injectable urlopen), CLI integration tests, scan_llm and report_tree tests. One test skipped on Windows for symlink edge case.
+
+Static analysis:
+- bandit — dangerous Python patterns in application source.
+- pip-audit — known CVEs in locked dependencies.
+
+Documentation artifacts:
+- README.md — install, CLI, troubleshooting.
+- QUICKSTART.md — step-by-step first run.
+- SECURITY.md — reporting vulnerabilities, data handling.
+- docs/TECHNICAL_REPORT.md — architecture deep dive.
+- docs/SECURITY_REPORT.md — threat ↔ code mapping.
+- AGENTS.md — phase checklist for maintainers.
+
+
+================================================================================
+12. PROJECT PHASES COMPLETED (TIMELINE SLIDE)
+================================================================================
+
+Phase 1 — Skeleton: package layout, CLI --help/--version, module structure, initial tests.
+
+Phase 2 — Secure local core: ConfigManager, --scan, redaction, SECURITY.md draft.
+
+Phase 3 — GitHub + LLM: --issues, questionary UI, Anthropic/Gemini orchestration, M2/M3 controls.
+
+Phase 4 — CI + docs: GitHub Actions, bandit, pip-audit, README/SECURITY alignment with uv lockfile.
+
+Final release additions (beyond original M3):
+- --llm-report with per-file analysis, compaction, synthesis, artifact tree.
+- --list-google-models, --test-llm.
+- Resilience: HTTP 500 retries, hierarchical compaction, map-reduce synthesis.
+- report_tree hierarchical output for auditability.
+
+
+================================================================================
+13. KEY CLI COMMANDS (APPENDIX / DEMO CHEAT SHEET SLIDE)
+================================================================================
+
+Install: git clone … && cd 366_project && uv sync --all-groups
+
+Credentials:
+  secanalyzer --set-token github
+  secanalyzer --set-token llm --provider gemini
+  secanalyzer --api-key-status
+  secanalyzer --test-llm
+  secanalyzer --list-google-models
+
+Scan:
+  secanalyzer --scan PATH [-o file.md]
+
+LLM report:
+  secanalyzer --llm-report PATH [-o report.md] [--report-dir DIR]
+
+GitHub:
+  secanalyzer --issues owner/repo [--provider gemini]
+
+Quality (local / CI parity):
+  uv run pytest
+  uv run bandit -r src/secanalyzer
+  uv run pip-audit
+
+
+================================================================================
+14. LIMITATIONS AND HONEST CAVEATS (BUILD TRUST — ONE SLIDE)
+================================================================================
+
+- LLM output is advisory, not a formal security audit or compliance sign-off.
+- Regex redaction is heuristic; false negatives possible.
+- Prompt injection risk reduced but not eliminated.
+- Gemma/Google free tier may return HTTP 500 or rate limits; retries help but runs can be slow.
+- --llm-report cost scales with file count (one API call per file + compactions + synthesis).
+- Interactive --issues requires terminal with keyboard support.
+- Windows native venv vs WSL: use separate .venv per environment (documented in README troubleshooting).
+- Per-function unit test coverage is module-oriented, not literally one test per function.
+
+
+================================================================================
+15. FUTURE WORK (OPTIONAL ROADMAP SLIDE — NOT IN FINAL BINARY)
+================================================================================
+
+- Centralized logging and monitoring (course optional).
+- Formal penetration test of CLI + API integration.
+- Live API ping in --api-key-status for all vendors.
+- Stronger model-agnostic JSON mode where vendors support it.
+- IDE plugin or SARIF export for CI gates.
+- Parallel per-file LLM calls with global rate limiter.
+
+
+================================================================================
+16. SUGGESTED SLIDE DECK OUTLINE (15-MINUTE PRESENTATION)
+================================================================================
+
+Slide 1 — Title: secanalyzer, AI-assisted local security CLI, Siddhu Bhimireddy, final release.
+
+Slide 2 — Problem: scale of code + PRs; risk of secret leakage to AI tools.
+
+Slide 3 — Solution in one sentence: local CLI, optional LLM, GitHub triage, Markdown outputs.
+
+Slide 4 — Demo architecture diagram: User → CLI → {local scan | GitHub API | LLM API} → Markdown.
+
+Slide 5 — Three MVP features (documentation, issues/PRs, mitigations).
+
+Slide 6 — Six components table (CLI, config, repo analyzer, GitHub client, LLM, output/session).
+
+Slide 7 — Security highlights: five threats, three strongest controls (redaction, path confinement, schema validation).
+
+Slide 8 — What data leaves the laptop (transparency).
+
+Slide 9 — Live demo plan: pick Journey A or B or C (60–90 seconds each).
+
+Slide 10 — --llm-report deep dive (optional if demo C): per-file → compaction → synthesis → artifact tree.
+
+Slide 11 — DevOps: uv, GitHub Actions, pytest + bandit + pip-audit.
+
+Slide 12 — Testing and quality: mocked HTTP, 80+ tests, frozen lockfile.
+
+Slide 13 — Limitations and responsible use.
+
+Slide 14 — Q&A.
+
+Backup slide — Environment variables and troubleshooting (WSL .venv, model 404, HTTP 500).
+
+
+================================================================================
+17. MESSAGING FOR TECHNICAL WRITERS (HOW TO REUSE OUTPUTS)
+================================================================================
+
+secanalyzer outputs are already structured for downstream editing:
+
+- --scan produces deterministic Markdown with headings and tables (inventory).
+- --llm-report produces a multi-section security report with Executive summary, Architecture, High-risk files, Themes, Checklist — suitable for trimming into executive briefs or customer security whitepapers (after human review).
+- --issues produces per-item sections with risk level, justification, file:line references, and mitigation — suitable for internal review tickets or release notes.
+
+Writers should:
+- Treat all LLM text as draft requiring human verification.
+- Strip processing notes and internal warnings before external publication.
+- Replace vendor-specific model names with generic “AI-assisted analysis” if needed for public docs.
+
+The report-tree artifact directory provides source-level notes (files/*.md) that writers can cite as appendices without exposing entire repositories.
+
+
+================================================================================
+18. REPOSITORY AND ARTIFACT LINKS (FOOTER SLIDES)
+================================================================================
+
+GitHub repo: https://github.com/flufcloud/366_project
+GitHub Projects: https://github.com/users/flufcloud/projects/2/views/1
+Technical report: docs/TECHNICAL_REPORT.md (in repo)
+Security report: docs/SECURITY_REPORT.md (in repo)
+SECURITY policy: SECURITY.md (in repo)
+
+
+================================================================================
+END OF BRIEF — feed this entire document to slide-generation AI with instruction:
+“Create 12–15 slides for a 15-minute technical team presentation; plain language;
+one diagram suggestion per architecture slide; include demo script and Q&A backup.”
+================================================================================

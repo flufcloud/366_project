@@ -34,6 +34,21 @@ def test_save_llm_roundtrip(cfg_home: Path) -> None:
     assert k.startswith("sk-ant-")
 
 
+def test_save_google_model_persists(cfg_home: Path) -> None:
+    config.save_llm_credentials("gemini", "AIza" + "0" * 35)
+    config.save_google_model("gemini-2.5-flash")
+    assert config.load_google_model() == "gemini-2.5-flash"
+    # Re-saving LLM creds must keep google_model.
+    config.save_llm_credentials("gemini", "AIza" + "1" * 35)
+    assert config.load_google_model() == "gemini-2.5-flash"
+
+
+def test_save_google_model_requires_gemini(cfg_home: Path) -> None:
+    config.save_llm_credentials("claude", "sk-ant-api03-" + "y" * 20)
+    with pytest.raises(ConfigurationError):
+        config.save_google_model("gemini-2.5-flash")
+
+
 def test_anthropic_alias_normalizes(cfg_home: Path) -> None:
     config.save_llm_credentials("anthropic", "sk-ant-api03-" + "z" * 20)
     p, _ = config.load_llm_config()  # type: ignore[misc]

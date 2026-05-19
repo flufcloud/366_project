@@ -13,7 +13,8 @@ Please **do not** open a public GitHub issue for undisclosed security problems. 
 | Feature | Content |
 |--------|---------|
 | **`--issues`** | PR/issue metadata, titles, bodies, and truncated patch text you choose to include, wrapped in delimiter blocks. Output must match a fixed JSON schema before display. |
-| **`--scan` (optional narrative)** | A **bounded** text block: scan root path, counts, extension histogram, up to a capped list of relative paths, and up to a few **short, redacted** code excerpts—**not** the full repository. The model is asked to return Markdown prose only (no JSON). |
+| **`--scan`** | Static inventory only (paths, counts, redacted metadata). |
+| **`--llm-report`** | Per-file source (one file per LLM call), rolling compaction, final Markdown report (architecture + high attack-surface files). |
 
 Heuristic **redaction** runs on file content used in reports and on the **entire outbound prompt** before send. If credential-shaped patterns remain after redaction, the tool **aborts** the LLM request.
 

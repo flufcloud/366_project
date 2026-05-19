@@ -112,6 +112,28 @@ def _validate_llm_key_shape(provider: str, api_key: str) -> None:
         return
 
 
+def _read_llm_credentials_dict() -> dict[str, Any]:
+    path = llm_config_path()
+    if not path.is_file():
+        return {}
+    try:
+        data: Any = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        raise ConfigurationError(
+            "LLM credentials file is corrupted (invalid JSON). Re-run --set-token llm.",
+        ) from e
+    if not isinstance(data, dict):
+        raise ConfigurationError("LLM credentials file has unexpected shape.")
+    return data
+
+
+def _write_llm_credentials_dict(data: dict[str, Any]) -> None:
+    ensure_config_dir()
+    path = llm_config_path()
+    path.write_text(json.dumps(data), encoding="utf-8")
+    _chmod_secret_file(path)
+
+
 def save_llm_credentials(provider: str, api_key: str) -> None:
     raw = provider.strip().lower()
     if raw not in _LLM_INPUT_ALIASES:
@@ -121,30 +143,51 @@ def save_llm_credentials(provider: str, api_key: str) -> None:
         )
     p = _normalize_provider(raw)
     _validate_llm_key_shape(p, api_key)
-    ensure_config_dir()
-    path = llm_config_path()
-    payload = {"provider": p, "api_key": api_key.strip()}
-    path.write_text(json.dumps(payload), encoding="utf-8")
-    _chmod_secret_file(path)
+    data = _read_llm_credentials_dict()
+    data["provider"] = p
+    data["api_key"] = api_key.strip()
+    _write_llm_credentials_dict(data)
 
 
 def load_llm_config() -> tuple[str, str] | None:
-    path = llm_config_path()
-    if not path.is_file():
+    data = _read_llm_credentials_dict()
+    if not data:
         return None
-    try:
-        data: Any = json.loads(path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as e:
-        raise ConfigurationError(
-            "LLM credentials file is corrupted (invalid JSON). Re-run --set-token llm.",
-        ) from e
-    if not isinstance(data, dict):
-        raise ConfigurationError("LLM credentials file has unexpected shape.")
     prov = data.get("provider")
     key = data.get("api_key")
     if not isinstance(prov, str) or not isinstance(key, str):
         raise ConfigurationError("LLM credentials file is missing provider or api_key.")
     return _normalize_provider(prov), key
+
+
+def load_google_model() -> str | None:
+    """Saved default Google ``generateContent`` model id, if any."""
+    data = _read_llm_credentials_dict()
+    raw = data.get("google_model")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    return None
+
+
+def save_google_model(model: str) -> None:
+    """Persist default Google model (used when provider is gemini)."""
+    mid = model.strip()
+    if not mid:
+        raise ConfigurationError("Google model id is empty.")
+    cfg = load_llm_config()
+    if cfg is None:
+        raise ConfigurationError(
+            "LLM not configured. Run: secanalyzer --set-token llm --provider gemini",
+        )
+    provider, _ = cfg
+    if provider != "gemini":
+        raise ConfigurationError(
+            "Google model applies only to provider gemini. "
+            "Run: secanalyzer --set-token llm --provider gemini",
+        )
+    data = _read_llm_credentials_dict()
+    data["google_model"] = mid
+    _write_llm_credentials_dict(data)
 
 
 def validate_github_token(

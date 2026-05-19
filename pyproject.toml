@@ -9,6 +9,7 @@ description = "AI-powered local CLI for codebase security documentation and GitH
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
+    "bandit>=1.9.4",
     "platformdirs>=4.9.6",
     "questionary>=2.1.1",
 ]

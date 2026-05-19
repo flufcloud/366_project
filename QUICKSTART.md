@@ -1,6 +1,6 @@
 # Quickstart — secanalyzer
 
-This guide walks you from **zero** to running **`--scan`** and **`--issues`** on your machine. Commands assume a Unix-style shell (**Linux**, **macOS**, or **WSL** on Windows).
+This guide walks you from **zero** to running **`--scan`** and GitHub issue analysis on your machine. Commands assume a Unix-style shell (**Linux**, **macOS**, or **WSL** on Windows).
 
 ---
 
@@ -10,7 +10,7 @@ This guide walks you from **zero** to running **`--scan`** and **`--issues`** on
 |---------------|--------|
 | **[uv](https://docs.astral.sh/uv/)** | Package manager and virtualenv (install: `curl -LsSf https://astral.sh/uv/install.sh \| sh` on Linux/macOS, or see uv docs for Windows). |
 | **Git** | To clone this repository. |
-| **Network** | For `uv` downloads, GitHub API, and LLM APIs when you use `--issues`. |
+| **Network** | For `uv` downloads, GitHub API, and LLM APIs when you use `--analyze-issue`. |
 
 You do **not** need a system-wide Python 3.11 first: `uv` can install the version pinned in [`.python-version`](.python-version) into the project when you sync.
 
@@ -51,7 +51,7 @@ This creates **`.venv/`** in this folder, installs dependencies from **[`uv.lock
 uv run secanalyzer --help
 ```
 
-You should see usage for flags like `--scan`, `--issues`, `--set-token`, etc.
+You should see usage for flags like `--scan`, `--list-issues`, `--analyze-issue`, `--set-token`, etc.
 
 ---
 
@@ -59,7 +59,7 @@ You should see usage for flags like `--scan`, `--issues`, `--set-token`, etc.
 
 Credentials are stored under your OS **user config directory** (not in the git repo). For tests only, you can override with `SECANALYZER_CONFIG_DIR`; otherwise ignore that variable.
 
-### 3a. GitHub token (required for `--issues`)
+### 3a. GitHub token (required for `--list-issues` / `--analyze-issue`)
 
 1. Create a **Personal Access Token** at [github.com/settings/tokens](https://github.com/settings/tokens) with at least the **`repo`** scope (so private repos you can access work too, if needed).
 2. From the project root, run:
@@ -70,7 +70,7 @@ Credentials are stored under your OS **user config directory** (not in the git r
 
 3. When prompted, **paste the token** (input is hidden). Press Enter.
 
-### 3b. LLM API key (required for `--issues`)
+### 3b. LLM API key (required for `--analyze-issue`)
 
 You need either **Anthropic (Claude)** or **Google (Gemini)** credentials, matching what you configure below.
 
@@ -133,32 +133,33 @@ If redaction ran during scanning, you will see a **`[WARNING]`** line on stderr.
 
 ---
 
-## 6. Analyze open GitHub issues and PRs (interactive)
+## 6. GitHub issues and PRs
 
 **Requirements:** Sections 3–4 completed successfully.
 
+**List open items (table to stdout):**
+
 ```bash
-uv run secanalyzer --issues YOUR_GITHUB_LOGIN/YOUR_REPO_NAME
+uv run secanalyzer --list-issues YOUR_GITHUB_LOGIN/YOUR_REPO_NAME
 ```
 
-Example:
+**Analyze one issue or PR:**
 
 ```bash
-uv run secanalyzer --issues octocat/Hello-World
+uv run secanalyzer --analyze-issue octocat/Hello-World --issue-number 42
+uv run secanalyzer --analyze-issue org/repo --issue-number 7 -o issue-7.md --provider claude
 ```
 
 **What happens:**
 
-1. The tool lists **open** issues and pull requests from the GitHub API.
-2. A **keyboard** menu appears (↑ / ↓, **Enter** to choose).
-3. **Esc** cancels the menu and exits the issues loop (clean exit).
-4. For a **pull request**, truncated patch text may be included in the LLM context.
-5. The model returns **JSON** (risk level, justification, suggested mitigation, optional file/line hints). The tool validates it and prints a readable summary to **stdout**.
-
-**`--provider` with `--issues`:** Optional. If you use it, it must match the vendor you stored with `--set-token llm` (**`claude`** / **`gemini`** / **`anthropic`** as alias for claude). Example:
+1. The tool fetches the issue/PR title, body, and comment thread from GitHub.
+2. For a **pull request**, a truncated patch may be included.
+3. The LLM returns a brief Markdown report: **Risk level**, **Security overview**, **Recommended actions**.
+4. Optional: pass a prior **`--llm-report`** artifact directory with `--report-context` (and `--report-scope` for a subdirectory rolling summary).
 
 ```bash
-uv run secanalyzer --issues org/repo --provider claude
+uv run secanalyzer --analyze-issue org/repo --issue-number 42 \
+  --report-context ./repo-llm-report --report-scope src/auth
 ```
 
 ---
@@ -171,7 +172,8 @@ uv run secanalyzer --issues org/repo --provider claude
 | Version | `uv run secanalyzer --version` |
 | Scan → stdout | `uv run secanalyzer --scan PATH` |
 | Scan → file | `uv run secanalyzer --scan PATH -o report.md` |
-| Issues / PRs | `uv run secanalyzer --issues owner/repo` |
+| List issues / PRs | `uv run secanalyzer --list-issues owner/repo` |
+| Analyze one issue | `uv run secanalyzer --analyze-issue owner/repo --issue-number N` |
 | Check tokens | `uv run secanalyzer --api-key-status` |
 
 Alternative without typing `uv run` every time:
@@ -189,7 +191,8 @@ If the default models are wrong for your account, set environment variables for 
 
 ```bash
 export SECANALYZER_ANTHROPIC_MODEL=claude-3-5-haiku-20241022
-export SECANALYZER_GEMINI_MODEL=gemini-2.0-flash
+export SECANALYZER_GEMMA_MODEL=gemma-3-12b-it
+# Or: export SECANALYZER_GEMINI_MODEL=gemini-2.5-flash
 ```
 
 ---
