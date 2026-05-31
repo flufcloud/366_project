@@ -1,4 +1,4 @@
-**M2: Agile Requirements and Backlog Planning**
+﻿**M2: Agile Requirements and Backlog Planning**
 
 # **1\. Team Identity and Infrastructure**
 

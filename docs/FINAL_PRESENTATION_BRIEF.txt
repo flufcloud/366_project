@@ -217,7 +217,7 @@ THREAT 3 — Path traversal / shell injection from malicious repo
 - Residual: exotic FS edge cases; analyze untrusted repos in VM.
 
 THREAT 4 — Exfiltration of sensitive code to LLM vendor
-- Mitigation: extension allowlist; snippet caps; token budgets; redaction; --scan does not send full tree by default; docs/guides/SECURITY.md documents what crosses boundary.
+- Mitigation: extension allowlist; snippet caps; token budgets; redaction; --scan does not send full tree by default; docs/SECURITY.md documents what crosses boundary.
 - Residual: proprietary logic without “secret” syntax still sent if user runs LLM features; vendor retention policies apply.
 
 THREAT 5 — Supply chain / dependency attacks
@@ -271,12 +271,12 @@ Static analysis:
 - pip-audit — known CVEs in locked dependencies.
 
 Documentation artifacts:
-- README.md — install, CLI, troubleshooting.
-- docs/guides/QUICKSTART.md — step-by-step first run.
-- docs/guides/SECURITY.md — reporting vulnerabilities, data handling.
-- docs/reports/TECHNICAL_REPORT.md — architecture deep dive.
-- docs/reports/SECURITY_REPORT.md — threat ↔ code mapping.
-- AGENTS.md — phase checklist for maintainers.
+- README.md — concise quickstart and build commands.
+- docs/QUICKSTART.md — step-by-step first run.
+- docs/SECURITY.md — reporting vulnerabilities, data handling.
+- docs/TECHNICAL_REPORT.md — architecture deep dive.
+- docs/SECURITY_REPORT.md — threat ↔ code mapping.
+- docs/M5_Final_Release_Report.md — final hardening summary and validation evidence.
 
 
 ================================================================================
@@ -285,7 +285,7 @@ Documentation artifacts:
 
 Phase 1 — Skeleton: package layout, CLI --help/--version, module structure, initial tests.
 
-Phase 2 — Secure local core: ConfigManager, --scan, redaction, docs/guides/SECURITY.md draft.
+Phase 2 — Secure local core: ConfigManager, --scan, redaction, docs/SECURITY.md draft.
 
 Phase 3 — GitHub + LLM: --issues, questionary UI, Anthropic/Gemini orchestration, M2/M3 controls.
 
@@ -336,7 +336,7 @@ Quality (local / CI parity):
 - Gemma/Google free tier may return HTTP 500 or rate limits; retries help but runs can be slow.
 - --llm-report cost scales with file count (one API call per file + compactions + synthesis).
 - Interactive --issues requires terminal with keyboard support.
-- Windows native venv vs WSL: use separate .venv per environment (documented in README troubleshooting).
+- Windows native venv vs WSL: use separate .venv per environment (documented in QUICKSTART.md and DEPLOYMENT.md).
 - Per-function unit test coverage is module-oriented, not literally one test per function.
 
 
@@ -411,9 +411,9 @@ The report-tree artifact directory provides source-level notes (files/*.md) that
 
 GitHub repo: https://github.com/flufcloud/366_project
 GitHub Projects: https://github.com/users/flufcloud/projects/2/views/1
-Technical report: docs/reports/TECHNICAL_REPORT.md (in repo)
-Security report: docs/reports/SECURITY_REPORT.md (in repo)
-SECURITY policy: docs/guides/SECURITY.md (in repo)
+Technical report: docs/TECHNICAL_REPORT.md (in repo)
+Security report: docs/SECURITY_REPORT.md (in repo)
+SECURITY policy: docs/SECURITY.md (in repo)
 
 
 ================================================================================

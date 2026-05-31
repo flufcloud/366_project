@@ -1,4 +1,4 @@
-# secanalyzer
+﻿# secanalyzer
 
 Local CLI for codebase security review. It scans a repo, writes Markdown reports, runs Bandit on Python source, and can use an LLM to summarize security risks in code or GitHub issues/PRs.
 
@@ -93,22 +93,23 @@ SECANALYZER_LOG_DISABLE=1 uv run secanalyzer --help
 
 Please refer to the detailed deployment guide for a deeper dive into the internals:
 
-- [deliverables/README_AND_DEPLOYMENT_GUIDE.md](deliverables/README_AND_DEPLOYMENT_GUIDE.md)
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 That guide has the full third-party instructions to build, configure, monitor, and run the application. This README is primarily for a quickstart.
 
-Other final deliverables:
+Final deliverables:
 
-- [Final Written Report](deliverables/FINAL_WRITTEN_REPORT.md)
-- [Retrospective](deliverables/RETROSPECTIVE.md)
-- [Issue Log](deliverables/ISSUE_LOG.md)
+- [Final Written Report PDF](deliverables/final_report.docx.pdf)
+- [Retrospective PDF](deliverables/retrospective.pdf)
+- [Presentation Slides PDF](deliverables/slides.pdf)
+- [Issue Log](docs/ISSUE_LOG.md)
 
 Previous milestone docs:
 
-- [M2 Agile Requirements](docs/reports/M2_Agile_Requirements.md)
-- [M3 Design and Threat Modeling](docs/reports/M3_Design_Document_ThreatModeling.md)
-- [M4 Beta Release Report](docs/reports/M4_Beta_Release_Report.md)
-- [M5 Final Release Report](docs/reports/M5_Final_Release_Report.md)
+- [M2 Agile Requirements](docs/M2_Agile_Requirements.md)
+- [M3 Design and Threat Modeling](docs/M3_Design_Document_ThreatModeling.md)
+- [M4 Beta Release Report](docs/M4_Beta_Release_Report.md)
+- [M5 Final Release Report](docs/M5_Final_Release_Report.md)
 
 ## Security
 
@@ -116,5 +117,5 @@ The main security controls are path confinement, extension allowlisting, secret 
 
 Details:
 
-- [Security policy](docs/guides/SECURITY.md)
-- [Security report](docs/reports/SECURITY_REPORT.md)
+- [Security policy](docs/SECURITY.md)
+- [Security report](docs/SECURITY_REPORT.md)

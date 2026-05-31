@@ -1,4 +1,4 @@
-**M3: Design Document and Threat Modeling**
+﻿**M3: Design Document and Threat Modeling**
 
 AI-Powered Codebase Security Analyzer
 

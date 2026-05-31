@@ -24,11 +24,11 @@ Source layout follows a standard Python package structure:
 | `pyproject.toml`, `uv.lock` | Package metadata and locked dependencies |
 | `src/secanalyzer/` | Application modules |
 | `tests/` | pytest suite |
-| `README.md`, `docs/guides/QUICKSTART.md` | Build, install, and run instructions |
-| `docs/guides/SECURITY.md` | Vulnerability reporting and data handling policy |
-| `docs/reports/TECHNICAL_REPORT.md` | Architecture and data flows |
-| `docs/reports/SECURITY_REPORT.md` | Threats, mitigations, and code mapping |
-| `AGENTS.md` | Developer/agent notes and phase checklist |
+| `README.md`, `docs/QUICKSTART.md` | Build, install, and run instructions |
+| `docs/SECURITY.md` | Vulnerability reporting and data handling policy |
+| `docs/TECHNICAL_REPORT.md` | Architecture and data flows |
+| `docs/SECURITY_REPORT.md` | Threats, mitigations, and code mapping |
+| `docs/M5_Final_Release_Report.md` | Final hardening summary and validation evidence |
 
 ### 1.2 Issue Tracking
 
@@ -99,7 +99,7 @@ Because this is a Python project, "build" means a locked dependency sync plus op
 
 ### 2.2 README: How to Deploy and Run
 
-The deployment model is a local CLI on the developer's machine. No server deployment is required. Please view the README.md and docs/guides/QUICKSTART.md that are attached in the appendix at the end of this report.
+The deployment model is a local CLI on the developer's machine. No server deployment is required. Please view the README.md and docs/QUICKSTART.md that are attached in the appendix at the end of this report.
 
 ---
 

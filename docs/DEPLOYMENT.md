@@ -1,4 +1,4 @@
-# Deployment Guide
+﻿# Deployment Guide
 
 `secanalyzer` deploys as a local Python CLI. There is no server, daemon, database, or cloud runtime to provision.
 
@@ -96,5 +96,5 @@ Review logs before sharing them because they can include repository paths, issue
 - `uv run bandit -r src/secanalyzer`
 - `uv run pip-audit`
 - `uv run secanalyzer --help`
-- Update [ISSUE_LOG.md](../reports/ISSUE_LOG.md) for accepted risks and technical debt.
+- Update [ISSUE_LOG.md](ISSUE_LOG.md) for accepted risks and technical debt.
 - Review changes to `pyproject.toml` and `uv.lock` as security-sensitive.

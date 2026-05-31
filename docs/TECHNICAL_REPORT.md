@@ -27,9 +27,9 @@ The implementation favors **stdlib `urllib`** for HTTP (no heavy HTTP client dep
 
 ---
 
-## 3. Logical architecture (six components)
+## 3. Logical architecture (seven components)
 
-The codebase follows a **six-module decomposition** aligned with the original design specification (CLI, config, repo analysis, GitHub client, LLM orchestration, output).
+The codebase follows the original design decomposition and adds a final-release operations module for local monitoring.
 
 | Component | Python module | Responsibility |
 |-----------|---------------|----------------|
@@ -40,6 +40,7 @@ The codebase follows a **six-module decomposition** aligned with the original de
 | **LLM orchestration** | [`llm.py`](../src/secanalyzer/llm.py) | Prompt construction with **delimiter blocks**; **~100k estimated-token budget**; **pre-send pattern scan**; Anthropic **Messages** and Gemini **generateContent** JSON mode; response **JSON schema** enforcement. |
 | **Issues session / glue** | [`issues_session.py`](../src/secanalyzer/issues_session.py) | **questionary** menu loop; stitches GitHub data into LLM prompts; prints rendered analysis. |
 | **OutputHandler** | [`output.py`](../src/secanalyzer/output.py) | UTF-8 write to stdout or path for scan reports. |
+| **Operations logger** | [`operations.py`](../src/secanalyzer/operations.py) | Sanitized JSONL events for command lifecycle, scan counts, redaction hits, Bandit results, GitHub/LLM failures, and retry pressure. |
 
 **Package entry:** [`__main__.py`](../src/secanalyzer/__main__.py) exposes `python -m secanalyzer`; console script `secanalyzer` is declared in [`pyproject.toml`](../pyproject.toml).
 
@@ -128,9 +129,9 @@ flowchart LR
 
 ## 7. Operational notes
 
-- **WSL vs Windows:** A `.venv` created on Windows is **not** usable inside WSL (different layout). Use **`rm -rf .venv`** then **`uv sync`** in the environment you use, or keep **separate clones** per OS. See [QUICKSTART.md](../guides/QUICKSTART.md).
-- **Optional model IDs:** `SECANALYZER_ANTHROPIC_MODEL`, `SECANALYZER_GEMINI_MODEL` (see [AGENTS.md](../../AGENTS.md)).
-- **Operational logs:** The CLI writes sanitized JSONL events through [`operations.py`](../../src/secanalyzer/operations.py). Logs capture command lifecycle, scan counts, redaction hits, Bandit results, GitHub/LLM API failures, and retry pressure. Set `SECANALYZER_LOG_FILE`, `SECANALYZER_LOG_LEVEL`, or `SECANALYZER_LOG_DISABLE` to control behavior.
+- **WSL vs Windows:** A `.venv` created on Windows is **not** usable inside WSL (different layout). Use **`rm -rf .venv`** then **`uv sync`** in the environment you use, or keep **separate clones** per OS. See [QUICKSTART.md](QUICKSTART.md).
+- **Optional model IDs:** `SECANALYZER_ANTHROPIC_MODEL`, `SECANALYZER_GEMINI_MODEL`, and `SECANALYZER_GEMMA_MODEL` can override default provider models.
+- **Operational logs:** The CLI writes sanitized JSONL events through [`operations.py`](../src/secanalyzer/operations.py). Logs capture command lifecycle, scan counts, redaction hits, Bandit results, GitHub/LLM API failures, and retry pressure. Set `SECANALYZER_LOG_FILE`, `SECANALYZER_LOG_LEVEL`, or `SECANALYZER_LOG_DISABLE` to control behavior.
 
 ---
 
@@ -148,11 +149,10 @@ flowchart LR
 
 | Document / path | Purpose |
 |-----------------|--------|
-| [README.md](../../README.md) | User-facing overview, CLI table, troubleshooting |
-| [QUICKSTART.md](../guides/QUICKSTART.md) | Step-by-step first run |
-| [SECURITY.md](../guides/SECURITY.md) | Data handling and disclosure |
-| [AGENTS.md](../../AGENTS.md) | Maintainer/agent checklist and env vars |
-| [docs/reports/SECURITY_REPORT.md](SECURITY_REPORT.md) | Threat-to-mitigation mapping |
+| [README.md](../README.md) | Concise quickstart and build commands |
+| [QUICKSTART.md](QUICKSTART.md) | Step-by-step first run |
+| [SECURITY.md](SECURITY.md) | Data handling and disclosure |
+| [SECURITY_REPORT.md](SECURITY_REPORT.md) | Threat-to-mitigation mapping |
 
 ---
 
