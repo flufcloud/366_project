@@ -102,14 +102,13 @@ Final deliverables:
 - [Final Written Report PDF](deliverables/final_report.docx.pdf)
 - [Retrospective PDF](deliverables/retrospective.pdf)
 - [Presentation Slides PDF](deliverables/slides.pdf)
-- [Issue Log](docs/ISSUE_LOG.md)
 
 Previous milestone docs:
 
-- [M2 Agile Requirements](docs/M2_Agile_Requirements.md)
-- [M3 Design and Threat Modeling](docs/M3_Design_Document_ThreatModeling.md)
-- [M4 Beta Release Report](docs/M4_Beta_Release_Report.md)
-- [M5 Final Release Report](docs/M5_Final_Release_Report.md)
+- [M2 Agile Requirements](milestones/M2_Agile_Requirements.md)
+- [M3 Design and Threat Modeling](milestones/M3_Design_Document_ThreatModeling.md)
+- [M4 Beta Release Report](milestones/M4_Beta_Release_Report.md)
+- [M5 Final Release Report](milestones/M5_Final_Release_Report.md)
 
 ## Security
 
