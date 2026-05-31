@@ -12,6 +12,7 @@ import urllib.parse
 import urllib.request
 from typing import Any, Callable
 
+from secanalyzer import operations
 from secanalyzer.exceptions import LLMError
 from secanalyzer.repo_analyzer import redact_text
 
@@ -320,6 +321,13 @@ def _parse_retry_after_seconds(http_code: int, detail: str) -> float | None:
 
 
 def _emit_rate_limit_wait(attempt: int, wait_sec: float, provider: str) -> None:
+    operations.event(
+        "llm.rate_limit_retry",
+        level=30,
+        provider=provider,
+        attempt=attempt,
+        wait_seconds=round(wait_sec, 2),
+    )
     sys.stderr.write(
         f"[INFO] {provider} rate limit (HTTP 429/503); "
         f"waiting {wait_sec:.0f}s before retry {attempt} …\n",
@@ -328,6 +336,13 @@ def _emit_rate_limit_wait(attempt: int, wait_sec: float, provider: str) -> None:
 
 
 def _emit_server_error_wait(attempt: int, wait_sec: float, provider: str) -> None:
+    operations.event(
+        "llm.server_error_retry",
+        level=30,
+        provider=provider,
+        attempt=attempt,
+        wait_seconds=round(wait_sec, 2),
+    )
     sys.stderr.write(
         f"[INFO] {provider} server error (HTTP 500); "
         f"waiting {wait_sec:.0f}s before retry {attempt} …\n",
@@ -593,6 +608,11 @@ def assert_prompt_passes_presend_filter(full_text: str) -> None:
     """Abort if credential-shaped patterns appear in outbound prompt text (blocks accidental exfiltration to providers)."""
     _text, hits = redact_text(full_text)
     if hits > 0:
+        operations.security_event(
+            "llm.presend_filter_blocked",
+            redaction_hits=hits,
+            estimated_tokens=estimate_tokens(full_text),
+        )
         raise LLMError(
             "Aborting LLM request: credential-shaped patterns were detected in the assembled "
             "prompt. Remove secrets from the issue/PR body or reduce included diffs, then retry.",
@@ -847,17 +867,26 @@ def _invoke_llm_raw(
     max_output_tokens: int | None = None,
 ) -> str:
     """Dispatch a completion; *max_output_tokens* caps provider output (smaller for digest steps)."""
+    operations.event(
+        "llm.request_started",
+        provider=provider,
+        estimated_user_tokens=estimate_tokens(user_block),
+        json_response=json_response,
+        max_output_tokens=max_output_tokens,
+    )
     if provider == "claude":
         mt = max_output_tokens if max_output_tokens is not None else 4096
-        return _call_anthropic(
+        text = _call_anthropic(
             api_key,
             system_prompt,
             user_block,
             urlopen=urlopen,
             max_tokens=mt,
         )
+        operations.event("llm.request_completed", provider=provider, output_chars=len(text))
+        return text
     if provider == "gemini":
-        return _call_gemini(
+        text = _call_gemini(
             api_key,
             system_prompt,
             user_block,
@@ -865,6 +894,8 @@ def _invoke_llm_raw(
             json_response=json_response,
             max_output_tokens=max_output_tokens,
         )
+        operations.event("llm.request_completed", provider=provider, output_chars=len(text))
+        return text
     raise LLMError(f"Unsupported provider for LLM call: {provider!r}.")
 
 

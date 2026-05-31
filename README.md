@@ -1,4 +1,4 @@
-# AI-Powered Codebase Security Analyzer
+﻿# AI-Powered Codebase Security Analyzer
 
 A local Linux command-line tool that uses large language models to help developers and security engineers understand, document, and evaluate the security posture of a codebase.
 
@@ -16,12 +16,13 @@ Point the tool at any repository and it will automatically generate structured d
 - [CI/CD](#cicd)
 - [Token Setup](#token-setup)
 - [Quickstart](#quickstart)
-- [Quickstart guide (step-by-step)](QUICKSTART.md)
+- [Quickstart guide (step-by-step)](docs/guides/QUICKSTART.md)
+- [Deployment guide](docs/guides/DEPLOYMENT.md)
 - [CLI Reference](#cli-reference)
 - [Security and Data Handling](#security-and-data-handling)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
-- [Architecture & security reports](docs/TECHNICAL_REPORT.md) — see also [security report](docs/SECURITY_REPORT.md)
+- [Architecture & security reports](docs/reports/TECHNICAL_REPORT.md) — see also [security report](docs/reports/SECURITY_REPORT.md)
 
 ---
 
@@ -67,6 +68,13 @@ uv run secanalyzer --help
 ```
 
 Agent-oriented checklists and phase notes live in [AGENTS.md](AGENTS.md).
+
+Detailed documentation is organized under `docs/`:
+
+| Folder | Contents |
+|---|---|
+| [`docs/guides/`](docs/guides/) | User guides, quickstart, security policy, deployment notes. |
+| [`docs/reports/`](docs/reports/) | Course milestone reports, technical report, security report, presentation brief, issue log. |
 
 ---
 
@@ -180,7 +188,7 @@ Credentials are stored in local files and are **never** hard-coded or committed 
 
 ## Quickstart
 
-**First-time setup from zero:** follow **[QUICKSTART.md](QUICKSTART.md)** (install uv, `uv sync`, tokens, verify, then run the commands below).
+**First-time setup from zero:** follow **[QUICKSTART.md](docs/guides/QUICKSTART.md)** (install uv, `uv sync`, tokens, verify, then run the commands below).
 
 **Static scan (inventory only, no LLM):**
 
@@ -255,7 +263,21 @@ This tool is built with a security-first design. Key guarantees:
 
 - **Dependencies are locked.** Third-party packages are pinned in [`uv.lock`](uv.lock). CI runs `uv sync --frozen --all-groups` and **`pip-audit`** on every push/PR. Review lockfile changes in PRs like any other security-sensitive diff.
 
-For full details on data handling guarantees and how to report a vulnerability, see [SECURITY.md](SECURITY.md).
+For full details on data handling guarantees and how to report a vulnerability, see [SECURITY.md](docs/guides/SECURITY.md).
+
+### Operational logging
+
+Every CLI run writes sanitized JSONL operational events to the user log directory by default:
+
+```bash
+uv run python - <<'PY'
+from pathlib import Path
+from platformdirs import user_log_dir
+print(Path(user_log_dir("secanalyzer", appauthor=False)) / "operations.jsonl")
+PY
+```
+
+The log records command lifecycle events, scan counts, redaction hits, Bandit results, GitHub/LLM API failures, and retry pressure. Token-like fields are redacted before write. Set `SECANALYZER_LOG_FILE=/path/to/operations.jsonl` to choose a location, `SECANALYZER_LOG_LEVEL=DEBUG|INFO|WARNING|ERROR` for verbosity, or `SECANALYZER_LOG_DISABLE=1` to disable file logging.
 
 ---
 
@@ -312,4 +334,4 @@ The lockfile may be out of date relative to `pyproject.toml`. A maintainer shoul
 
 This project follows a weekly sprint cadence. The active backlog is maintained on the [GitHub Project Board](https://github.com/users/flufcloud/projects/2/views/1).
 
-To report a security vulnerability, please follow the responsible disclosure process documented in [SECURITY.md](SECURITY.md) rather than opening a public issue.
+To report a security vulnerability, please follow the responsible disclosure process documented in [SECURITY.md](docs/guides/SECURITY.md) rather than opening a public issue.

@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import os
-import subprocess
+# Bandit is invoked with a fixed argv list and shell=False.
+import subprocess  # nosec B404
 import sys
 from collections import Counter
 from dataclasses import dataclass, field
@@ -12,8 +13,23 @@ from pathlib import Path
 
 from secanalyzer.repo_analyzer import SKIP_DIR_NAMES
 
-# Align with repository walk skips (Bandit ``-x`` comma-separated path fragments).
-_BANDIT_EXCLUDE = ",".join(sorted(SKIP_DIR_NAMES))
+BANDIT_SKIP_DIR_NAMES = SKIP_DIR_NAMES | {"test", "tests"}
+
+
+def _walk_python_files(root: Path) -> int:
+    """Count Python files while honoring the same skip directories as the scanner."""
+    count = 0
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = [d for d in dirnames if d not in BANDIT_SKIP_DIR_NAMES]
+        for name in filenames:
+            if name.endswith(".py"):
+                count += 1
+    return count
+
+
+def _bandit_exclude_arg(root: Path) -> str:
+    """Bandit expects paths for ``-x``; absolute skip paths avoid scanning `.venv`."""
+    return ",".join(str(root / name) for name in sorted(BANDIT_SKIP_DIR_NAMES))
 
 
 @dataclass(frozen=True)
@@ -145,8 +161,8 @@ def run_bandit_on_tree(
         return None, "Bandit skipped (SECANALYZER_SCAN_SKIP_BANDIT is set)."
 
     root = root.resolve()
-    has_py = any(root.rglob("*.py"))
-    if not has_py:
+    py_count = _walk_python_files(root)
+    if not py_count:
         return None, "No .py files under scan root; Bandit not run."
 
     cap = max_issues_in_report
@@ -168,11 +184,14 @@ def run_bandit_on_tree(
         "-q",
         "--exit-zero",
     ]
-    if _BANDIT_EXCLUDE:
-        cmd.extend(["-x", _BANDIT_EXCLUDE])
+    exclude_arg = _bandit_exclude_arg(root)
+    if exclude_arg:
+        cmd.extend(["-x", exclude_arg])
 
     try:
-        proc = subprocess.run(
+        # `cmd` is a fixed argv list; the only user-derived value is the already
+        # resolved scan root passed as one argument, never through a shell.
+        proc = subprocess.run(  # nosec B603
             cmd,
             capture_output=True,
             text=True,
@@ -202,13 +221,6 @@ def run_bandit_on_tree(
 
     result = _parse_bandit_json(data, root)
 
-    # Count .py files under root (respecting skip dirs roughly)
-    py_count = 0
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        dirnames[:] = [d for d in dirnames if d not in SKIP_DIR_NAMES]
-        for name in filenames:
-            if name.endswith(".py"):
-                py_count += 1
     if py_count:
         result.python_files_scanned = py_count
 

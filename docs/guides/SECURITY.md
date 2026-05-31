@@ -1,4 +1,4 @@
-# Security policy
+﻿# Security policy
 
 ## Reporting a vulnerability
 
@@ -30,3 +30,17 @@ Regex-based redaction can **miss** novel secret formats. Vendor **retention and 
 ## Supply chain
 
 Dependencies are pinned in `uv.lock`. CI runs `uv sync --frozen`, `bandit`, and `pip-audit`. Treat lockfile changes as security-sensitive in code review.
+
+## Operational logging
+
+The CLI writes sanitized JSONL events to `operations.jsonl` in the user log directory by default. Events include command starts/completions, scan metrics, redaction hits, Bandit counts, GitHub/LLM request failures, and LLM retry pressure.
+
+The logger redacts fields whose names imply secrets (`token`, `api_key`, `authorization`, `password`, `secret`, or `credential`) and truncates long strings. It is intended for local troubleshooting and demonstration evidence, not centralized telemetry. Configure it with:
+
+| Variable | Purpose |
+|----------|---------|
+| `SECANALYZER_LOG_FILE` | Write logs to a specific file. |
+| `SECANALYZER_LOG_LEVEL` | `DEBUG`, `INFO`, `WARNING`, or `ERROR`. |
+| `SECANALYZER_LOG_DISABLE` | Set to `1`, `true`, or `yes` to disable file logging. |
+
+Do not upload operational logs publicly until you have reviewed them for repository names, paths, issue titles, and other contextual data.

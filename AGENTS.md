@@ -1,4 +1,4 @@
-# AGENTS.md — secanalyzer
+﻿# AGENTS.md — secanalyzer
 
 Living notes for humans and coding agents. **Update this file** as phases complete (checklists, commands, decisions).
 
@@ -11,12 +11,15 @@ Living notes for humans and coding agents. **Update this file** as phases comple
 | [src/secanalyzer/](src/secanalyzer/) | Application code |
 | [src/secanalyzer/exceptions.py](src/secanalyzer/exceptions.py) | `UserFacingError`, `GitHubApiError`, `LLMError`, etc. (CLI → stderr, no tracebacks) |
 | [tests/](tests/) | `pytest` suite |
-| [SECURITY.md](SECURITY.md) | Vulnerability reporting + data-handling guarantees |
-| [QUICKSTART.md](QUICKSTART.md) | Step-by-step: install, tokens, `--scan`, `--list-issues`, `--analyze-issue` |
-| [docs/TECHNICAL_REPORT.md](docs/TECHNICAL_REPORT.md) | Architecture, data flows, engineering decisions (presentation-oriented) |
-| [docs/SECURITY_REPORT.md](docs/SECURITY_REPORT.md) | Threat catalog ↔ mitigations ↔ code/CI mapping |
-| [M2_Agile_Requirements.md](M2_Agile_Requirements.md) | MVP, NFRs, acceptance criteria |
-| [M3_Design_Document_ThreatModeling.md](M3_Design_Document_ThreatModeling.md) | Components A1–A6, threats, mitigations (file contains large base64 after §5 — use lines 1–98 for text) |
+| [docs/guides/SECURITY.md](docs/guides/SECURITY.md) | Vulnerability reporting + data-handling guarantees |
+| [docs/guides/QUICKSTART.md](docs/guides/QUICKSTART.md) | Step-by-step: install, tokens, `--scan`, `--list-issues`, `--analyze-issue` |
+| [docs/guides/DEPLOYMENT.md](docs/guides/DEPLOYMENT.md) | Build, install, operations, and release checklist |
+| [docs/reports/TECHNICAL_REPORT.md](docs/reports/TECHNICAL_REPORT.md) | Architecture, data flows, engineering decisions (presentation-oriented) |
+| [docs/reports/SECURITY_REPORT.md](docs/reports/SECURITY_REPORT.md) | Threat catalog ↔ mitigations ↔ code/CI mapping |
+| [docs/reports/ISSUE_LOG.md](docs/reports/ISSUE_LOG.md) | Formal outstanding bugs, acceptable risks, and technical debt |
+| [docs/reports/M5_Final_Release_Report.md](docs/reports/M5_Final_Release_Report.md) | Final hardening summary and validation evidence |
+| [docs/reports/M2_Agile_Requirements.md](docs/reports/M2_Agile_Requirements.md) | MVP, NFRs, acceptance criteria |
+| [docs/reports/M3_Design_Document_ThreatModeling.md](docs/reports/M3_Design_Document_ThreatModeling.md) | Components A1–A6, threats, mitigations (file contains large base64 after §5 — use lines 1–98 for text) |
 
 ## Architecture (M3 §2.1)
 
@@ -81,13 +84,20 @@ If `SECANALYZER_CONFIG_DIR` is set to a directory path, credentials are read/wri
 
 - [x] `--list-issues`, `--analyze-issue`, Anthropic/Gemini, optional `--llm-report` tree context
 
-### Phase 4 — CI + docs (current)
+### Phase 4 — CI + docs
 
 - [x] [`.github/workflows/ci.yml`](.github/workflows/ci.yml): `astral-sh/setup-uv@v5`, `uv sync --frozen --all-groups`, `pytest`, `bandit -r src/secanalyzer`, `pip-audit` (push/PR to `main` or `master`)
 - [x] Dev deps: `bandit`, `pip-audit`; `[tool.bandit]` in `pyproject.toml`
 - [x] [README.md](README.md): UV-first install, CI table, troubleshooting, accurate `--scan` / lockfile wording
-- [x] [SECURITY.md](SECURITY.md): CI + supply chain section finalized
+- [x] [SECURITY.md](docs/guides/SECURITY.md): CI + supply chain section finalized
 - [x] Tests: **45** passed, **1** skipped (Windows symlink)
+
+### Phase 5 — Final hardening (current)
+
+- [x] Documentation reorganized into `docs/guides/` and `docs/reports/`
+- [x] Local sanitized JSONL operational logging added in `src/secanalyzer/operations.py`
+- [x] Deployment guide and formal issue log added
+- [x] Validation after hardening: **99** passed, **1** skipped; Bandit no issues; pip-audit no known vulnerabilities
 
 ## Changelog
 
@@ -97,3 +107,4 @@ If `SECANALYZER_CONFIG_DIR` is set to a directory path, credentials are read/wri
 | 2026-05-13 | Phase 2 complete: config + `--scan` + redaction + `SECURITY.md`; **30** tests passed (**1** symlink skipped on Windows). |
 | 2026-05-13 | Phase 3 complete: `--issues`, questionary UI, Anthropic/Gemini orchestration, M2/M3 controls; **45** passed (**1** skipped). |
 | 2026-05-13 | Phase 4 complete: GitHub Actions CI, bandit + pip-audit in dev group, README/SECURITY aligned with **uv** + lockfile. |
+| 2026-05-30 | Phase 5 hardening in progress: docs reorganized, operational logging added, deployment guide + issue log created. |

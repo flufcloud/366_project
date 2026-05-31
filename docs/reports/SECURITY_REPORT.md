@@ -1,4 +1,4 @@
-# Security Report — Threat Model vs. Implementation
+﻿# Security Report — Threat Model vs. Implementation
 
 **Audience:** Security review or course presentation tying **documented threats** to **concrete controls** in code and process.  
 **Basis:** The project’s formal threat catalog (five attacks, DFD surface points **A1–A6**) and the shipped implementation under [`src/secanalyzer/`](../src/secanalyzer/).
@@ -75,7 +75,7 @@ External trust boundaries: **GitHub REST API**, **Anthropic / Google LLM APIs**.
 2. **No symlink follow on walk:** `os.walk(..., followlinks=False)` reduces symlink-based escapes into sibling trees.
 3. **No shell:** Scanning does not spawn a shell with path components as command fragments.
 
-**Residual risk:** Exotic filesystem behaviors; **Windows vs. WSL** path edge cases when sharing a single working copy—operational guidance in [QUICKSTART.md](../QUICKSTART.md).
+**Residual risk:** Exotic filesystem behaviors; **Windows vs. WSL** path edge cases when sharing a single working copy—operational guidance in [QUICKSTART.md](../guides/QUICKSTART.md).
 
 ---
 
@@ -89,7 +89,7 @@ External trust boundaries: **GitHub REST API**, **Anthropic / Google LLM APIs**.
 2. **Token budget:** Estimated-token ceiling (~**100k**) with **truncation** of the user block and stderr **warning** ([`enforce_prompt_token_budget`](../src/secanalyzer/llm.py)).
 3. **Redaction + abort:** Scan path redacts for reporting; LLM path **aborts** if outbound text still matches secret-like patterns ([`redact_text`](../src/secanalyzer/repo_analyzer.py) reused from [`llm.py`](../src/secanalyzer/llm.py)).
 4. **`--scan` narrative scope:** When an LLM is used for scan output, only a **capped path list** and **small excerpts** are placed inside **`SECANALYZER_SCAN_INVENTORY_*`** delimiters for [`generate_repo_scan_markdown`](../src/secanalyzer/llm.py); the default Markdown report **does not** embed every source line.
-5. **Transparency:** [SECURITY.md](../SECURITY.md), [QUICKSTART.md](../QUICKSTART.md), and [docs/SECURITY_REPORT.md](SECURITY_REPORT.md) describe what crosses the vendor boundary.
+5. **Transparency:** [SECURITY.md](../guides/SECURITY.md), [QUICKSTART.md](../guides/QUICKSTART.md), and [docs/SECURITY_REPORT.md](SECURITY_REPORT.md) describe what crosses the vendor boundary.
 
 **Residual risk:** **False negatives** on regex; **business logic** and **comments** without secret-like syntax still leave the org; users must **assume vendor retention policies** apply.
 
@@ -123,10 +123,11 @@ External trust boundaries: **GitHub REST API**, **Anthropic / Google LLM APIs**.
 
 | Control | Location |
 |---------|----------|
-| Vulnerability disclosure process | [SECURITY.md](../SECURITY.md) |
+| Vulnerability disclosure process | [SECURITY.md](../guides/SECURITY.md) |
 | CI security gates | [`.github/workflows/ci.yml`](../.github/workflows/ci.yml) |
-| Data classification for LLM | [SECURITY.md](../SECURITY.md) “What may / must not be sent” |
-| First-run operational safety | [QUICKSTART.md](../QUICKSTART.md) (venv OS mismatch) |
+| Data classification for LLM | [SECURITY.md](../guides/SECURITY.md) “What may / must not be sent” |
+| First-run operational safety | [QUICKSTART.md](../guides/QUICKSTART.md) (venv OS mismatch) |
+| Local operational logging | [`operations.py`](../../src/secanalyzer/operations.py), [SECURITY.md](../guides/SECURITY.md) “Operational logging” |
 
 ---
 

@@ -1,4 +1,4 @@
-# Technical Report — secanalyzer Codebase Architecture
+﻿# Technical Report — secanalyzer Codebase Architecture
 
 **Audience:** Technical stakeholders presenting system design and implementation.  
 **Scope:** Repository layout, components, control flows, and engineering choices as implemented in this codebase.
@@ -128,8 +128,9 @@ flowchart LR
 
 ## 7. Operational notes
 
-- **WSL vs Windows:** A `.venv` created on Windows is **not** usable inside WSL (different layout). Use **`rm -rf .venv`** then **`uv sync`** in the environment you use, or keep **separate clones** per OS. See [QUICKSTART.md](../QUICKSTART.md).
-- **Optional model IDs:** `SECANALYZER_ANTHROPIC_MODEL`, `SECANALYZER_GEMINI_MODEL` (see [AGENTS.md](../AGENTS.md)).
+- **WSL vs Windows:** A `.venv` created on Windows is **not** usable inside WSL (different layout). Use **`rm -rf .venv`** then **`uv sync`** in the environment you use, or keep **separate clones** per OS. See [QUICKSTART.md](../guides/QUICKSTART.md).
+- **Optional model IDs:** `SECANALYZER_ANTHROPIC_MODEL`, `SECANALYZER_GEMINI_MODEL` (see [AGENTS.md](../../AGENTS.md)).
+- **Operational logs:** The CLI writes sanitized JSONL events through [`operations.py`](../../src/secanalyzer/operations.py). Logs capture command lifecycle, scan counts, redaction hits, Bandit results, GitHub/LLM API failures, and retry pressure. Set `SECANALYZER_LOG_FILE`, `SECANALYZER_LOG_LEVEL`, or `SECANALYZER_LOG_DISABLE` to control behavior.
 
 ---
 
@@ -139,7 +140,7 @@ flowchart LR
 |------|----------------|
 | **Scan + LLM** | `--scan` always emits a short **deterministic inventory**; with LLM keys configured it **adds** a vendor-generated narrative from **bounded** excerpts (not the full tree). Optional `include_full_file_snippets=True` exists only for local debugging in [`report_to_markdown`](../src/secanalyzer/repo_analyzer.py). |
 | **Live LLM key check** | `--api-key-status` validates GitHub remotely; LLM side is **format** validation, not a vendor ping. |
-| **Telemetry** | None; all network calls are explicit user-initiated commands. |
+| **Telemetry** | No remote telemetry. Local JSONL operational logging exists for troubleshooting and presentation evidence; token-like fields are redacted before write. |
 
 ---
 
@@ -147,11 +148,11 @@ flowchart LR
 
 | Document / path | Purpose |
 |-----------------|--------|
-| [README.md](../README.md) | User-facing overview, CLI table, troubleshooting |
-| [QUICKSTART.md](../QUICKSTART.md) | Step-by-step first run |
-| [SECURITY.md](../SECURITY.md) | Data handling and disclosure |
-| [AGENTS.md](../AGENTS.md) | Maintainer/agent checklist and env vars |
-| [docs/SECURITY_REPORT.md](SECURITY_REPORT.md) | Threat-to-mitigation mapping |
+| [README.md](../../README.md) | User-facing overview, CLI table, troubleshooting |
+| [QUICKSTART.md](../guides/QUICKSTART.md) | Step-by-step first run |
+| [SECURITY.md](../guides/SECURITY.md) | Data handling and disclosure |
+| [AGENTS.md](../../AGENTS.md) | Maintainer/agent checklist and env vars |
+| [docs/reports/SECURITY_REPORT.md](SECURITY_REPORT.md) | Threat-to-mitigation mapping |
 
 ---
 

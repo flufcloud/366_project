@@ -210,7 +210,8 @@ def _invoke_llm_step(
                 break
             _emit_step_retry(step_label, attempt, max_attempts, str(e))
             _sleep_before_step_retry()
-    assert last_err is not None
+    if last_err is None:
+        raise LLMError(f"{step_label} failed without error details.")
     raise last_err
 
 

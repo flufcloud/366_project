@@ -10,6 +10,7 @@ from typing import Any
 
 from secanalyzer import config
 from secanalyzer import llm as llm_mod
+from secanalyzer import operations
 from secanalyzer.exceptions import LLMError, UserFacingError
 from secanalyzer.github_client import (
     IssueComment,
@@ -134,12 +135,14 @@ def run_list_issues(
 ) -> int:
     """Print a table of open issues/PRs (non-interactive)."""
     owner, repo = parse_owner_repo(owner_repo)
+    operations.event("issues.list_started", repository=f"{owner}/{repo}")
     token = config.load_github_token()
     if not token:
         raise UserFacingError(
             "GitHub token missing. Run: secanalyzer --set-token github",
         )
     items = list_open_work_items(owner, repo, token, urlopen=github_urlopen)
+    operations.event("issues.list_completed", repository=f"{owner}/{repo}", count=len(items))
     if not items:
         print(f"No open issues or PRs found for `{owner}/{repo}`.")
         return 0
@@ -161,6 +164,12 @@ def run_analyze_issue(
     owner, repo = parse_owner_repo(owner_repo)
     if issue_number < 1:
         raise UserFacingError("--issue-number must be a positive integer.")
+    operations.event(
+        "issues.analysis_started",
+        repository=f"{owner}/{repo}",
+        issue_number=issue_number,
+        report_context=report_tree_dir is not None,
+    )
 
     token = config.load_github_token()
     if not token:
@@ -249,6 +258,14 @@ def run_analyze_issue(
         item,
         overview,
         comment_count=len(comments),
+    )
+    operations.event(
+        "issues.analysis_completed",
+        repository=f"{owner}/{repo}",
+        issue_number=issue_number,
+        is_pull_request=item.is_pull_request,
+        comments=len(comments),
+        warnings=len(warnings),
     )
     return md, warnings
 

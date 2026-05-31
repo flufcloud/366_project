@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
+from secanalyzer import operations
 from secanalyzer.exceptions import UserFacingError
 
 
@@ -159,6 +160,7 @@ def _run_set_google_model(model: str) -> int:
         config.save_google_model(model)
     except ConfigurationError as e:
         raise UserFacingError(str(e)) from e
+    operations.event("config.google_model_saved", provider="gemini", model=model.strip())
     sys.stderr.write(f"Default Google model saved: {model.strip()!r}\n")
     return 0
 
@@ -173,6 +175,7 @@ def _run_set_token(kind: str, provider: str | None) -> int:
             config.save_github_token(token)
         except ConfigurationError as e:
             raise UserFacingError(str(e)) from e
+        operations.security_event("credential.updated", kind="github")
         sys.stderr.write("GitHub token saved under secanalyzer config directory.\n")
         return 0
 
@@ -190,6 +193,7 @@ def _run_set_token(kind: str, provider: str | None) -> int:
         config.save_llm_credentials(prov, key)
     except ConfigurationError as e:
         raise UserFacingError(str(e)) from e
+    operations.security_event("credential.updated", kind="llm", provider=prov)
     sys.stderr.write("LLM credentials saved under secanalyzer config directory.\n")
     return 0
 
@@ -198,6 +202,7 @@ def _run_api_key_status() -> int:
     from secanalyzer import config
     from secanalyzer.exceptions import ConfigurationError
 
+    operations.event("config.api_key_status_started")
     healthy = True
 
     g = config.load_github_token()
@@ -231,7 +236,9 @@ def _run_api_key_status() -> int:
 
                 print(f"     Google model: {llm_mod.resolve_google_generative_model()!r}")
 
-    return 0 if healthy else 1
+    exit_code = 0 if healthy else 1
+    operations.event("config.api_key_status_completed", healthy=healthy, exit_code=exit_code)
+    return exit_code
 
 
 def _run_list_google_models() -> int:
@@ -310,12 +317,18 @@ def _run_scan(scan_path: str, output: str | None) -> int:
     from secanalyzer.exceptions import ScanError
 
     out_path = Path(output).expanduser() if output else None
+    operations.event("scan.started", scan_path=scan_path, output=out_path)
     try:
         report = repo_analyzer.scan_repository(scan_path)
     except ScanError as e:
         raise UserFacingError(str(e)) from e
 
     if report.total_redactions > 0:
+        operations.security_event(
+            "scan.redactions_detected",
+            scan_root=report.root,
+            redaction_hits=report.total_redactions,
+        )
         sys.stderr.write(
             "[WARNING] Content redacted before reporting: "
             f"{report.total_redactions} pattern match(es) in scanned files.\n",
@@ -325,6 +338,15 @@ def _run_scan(scan_path: str, output: str | None) -> int:
     bandit_result, bandit_skip = bandit_scan.run_bandit_on_tree(report.root)
     if bandit_result is not None:
         bandit_section = bandit_scan.bandit_metrics_markdown(bandit_result)
+        operations.event(
+            "scan.bandit_completed",
+            scan_root=report.root,
+            total_issues=bandit_result.total_issues,
+            severity_high=bandit_result.severity_high,
+            severity_medium=bandit_result.severity_medium,
+            severity_low=bandit_result.severity_low,
+            python_files_scanned=bandit_result.python_files_scanned,
+        )
         sys.stderr.write(
             f"[INFO] Bandit: {bandit_result.total_issues} issue(s) "
             f"(HIGH={bandit_result.severity_high}, "
@@ -333,6 +355,7 @@ def _run_scan(scan_path: str, output: str | None) -> int:
             f"across {bandit_result.python_files_scanned} Python file(s).\n",
         )
     elif bandit_skip:
+        operations.event("scan.bandit_skipped", scan_root=report.root, reason=bandit_skip)
         bandit_section = (
             "## Static analysis (Bandit)\n\n"
             f"Bandit was not run: {bandit_skip}\n"
@@ -348,6 +371,13 @@ def _run_scan(scan_path: str, output: str | None) -> int:
         outmod.write_report(md, out_path)
     except OSError as e:
         raise UserFacingError(f"Could not write output: {e}") from e
+    operations.event(
+        "scan.completed",
+        scan_root=report.root,
+        files_matched=len(report.files),
+        redaction_hits=report.total_redactions,
+        output=out_path,
+    )
     return 0
 
 
@@ -373,6 +403,13 @@ def _run_llm_report(
             "LLM not configured. Run: secanalyzer --set-token llm --provider claude (or gemini).",
         )
     provider, api_key = llm_cfg
+    operations.event(
+        "llm_report.started",
+        scan_path=scan_path,
+        output=output,
+        report_dir=report_dir,
+        provider=provider,
+    )
     if provider == "gemini":
         try:
             llm_mod.assert_google_model_available(api_key)
@@ -388,6 +425,11 @@ def _run_llm_report(
         raise UserFacingError(str(e)) from e
 
     if report.total_redactions > 0:
+        operations.security_event(
+            "llm_report.redactions_detected",
+            scan_root=report.root,
+            redaction_hits=report.total_redactions,
+        )
         sys.stderr.write(
             "[WARNING] Content redacted before LLM analysis: "
             f"{report.total_redactions} pattern match(es).\n",
@@ -395,6 +437,14 @@ def _run_llm_report(
 
     analyzable = scan_llm.llm_analyzable_files(report)
     est_calls = scan_llm.estimate_llm_report_api_calls(len(analyzable))
+    operations.event(
+        "llm_report.plan",
+        scan_root=report.root,
+        provider=provider,
+        files_analyzable=len(analyzable),
+        estimated_api_calls=est_calls,
+        report_tree=tree_path,
+    )
     tree_note = (
         f" Artifact tree: `{tree_path}`."
         if tree_writer is not None
@@ -431,6 +481,14 @@ def _run_llm_report(
         outmod.write_report(md, out_path)
     except OSError as e:
         raise UserFacingError(f"Could not write output: {e}") from e
+    operations.event(
+        "llm_report.completed",
+        scan_root=report.root,
+        provider=provider,
+        warnings=len(llm_warns),
+        output=out_path,
+        report_tree=tree_path,
+    )
     return 0
 
 
@@ -438,6 +496,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     """Entry point for `secanalyzer` console script and tests."""
     if argv is None:
         argv = sys.argv[1:]
+    operations.configure_logging()
     parser = build_parser()
     try:
         args = parser.parse_args(list(argv))
@@ -445,6 +504,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if isinstance(e.code, int) and e.code != 0:
             return e.code
         raise
+
+    active = _mutating_actions(args)
+    action = active[0] if active else "help"
+    operations.event("cli.command_started", action=action, argv=list(argv))
 
     try:
         if args.google_model:
@@ -469,7 +532,6 @@ def main(argv: Sequence[str] | None = None) -> int:
                 "--report-scope requires --report-context DIR.",
             )
 
-        active = _mutating_actions(args)
         if len(active) > 1:
             raise UserFacingError(
                 "Use only one primary action at a time "
@@ -477,36 +539,28 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
 
         if args.set_token is not None:
-            return _run_set_token(args.set_token, args.provider)
-
-        if args.set_google_model is not None:
-            return _run_set_google_model(args.set_google_model)
-
-        if args.api_key_status:
-            return _run_api_key_status()
-
-        if args.test_llm:
-            return _run_test_llm()
-
-        if args.list_google_models:
-            return _run_list_google_models()
-
-        if args.scan is not None:
-            return _run_scan(args.scan, args.output)
-
-        if args.llm_report is not None:
-            return _run_llm_report(
+            exit_code = _run_set_token(args.set_token, args.provider)
+        elif args.set_google_model is not None:
+            exit_code = _run_set_google_model(args.set_google_model)
+        elif args.api_key_status:
+            exit_code = _run_api_key_status()
+        elif args.test_llm:
+            exit_code = _run_test_llm()
+        elif args.list_google_models:
+            exit_code = _run_list_google_models()
+        elif args.scan is not None:
+            exit_code = _run_scan(args.scan, args.output)
+        elif args.llm_report is not None:
+            exit_code = _run_llm_report(
                 args.llm_report,
                 args.output,
                 report_dir=args.report_dir,
             )
-
-        if args.list_issues is not None:
+        elif args.list_issues is not None:
             from secanalyzer.issues_session import run_list_issues
 
-            return run_list_issues(args.list_issues)
-
-        if args.analyze_issue is not None:
+            exit_code = run_list_issues(args.list_issues)
+        elif args.analyze_issue is not None:
             from secanalyzer.issues_session import run_analyze_issue
             from secanalyzer import output as outmod
 
@@ -524,17 +578,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 outmod.write_report(md, out_path)
             except OSError as e:
                 raise UserFacingError(f"Could not write output: {e}") from e
-            return 0
-
-        if args.provider is not None:
+            exit_code = 0
+        elif args.provider is not None:
             raise UserFacingError(
                 "`--provider` is only used with `--set-token llm` or `--analyze-issue` "
                 "(it must match the vendor of your stored LLM key).",
             )
-
-        parser.print_help()
-        return 0
+        else:
+            parser.print_help()
+            exit_code = 0
+        operations.event("cli.command_completed", action=action, exit_code=exit_code)
+        return exit_code
     except UserFacingError as e:
+        operations.event("cli.command_failed", action=action, error=str(e), level=40)
         sys.stderr.write(f"[ERROR] {e}\n")
         return 1
 

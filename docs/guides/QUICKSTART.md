@@ -1,4 +1,4 @@
-# Quickstart — secanalyzer
+﻿# Quickstart — secanalyzer
 
 This guide walks you from **zero** to running **`--scan`** and GitHub issue analysis on your machine. Commands assume a Unix-style shell (**Linux**, **macOS**, or **WSL** on Windows).
 
@@ -187,7 +187,7 @@ secanalyzer --scan .
 
 ## 8. Optional: model IDs (advanced)
 
-If the default models are wrong for your account, set environment variables for that shell session (see [AGENTS.md](AGENTS.md) for defaults):
+If the default models are wrong for your account, set environment variables for that shell session (see [AGENTS.md](../../AGENTS.md) for defaults):
 
 ```bash
 export SECANALYZER_ANTHROPIC_MODEL=claude-3-5-haiku-20241022
@@ -201,8 +201,9 @@ export SECANALYZER_GEMMA_MODEL=gemma-3-12b-it
 
 | Document | Purpose |
 |----------|---------|
-| [README.md](README.md) | Full feature list, CLI table, troubleshooting |
+| [README.md](../../README.md) | Full feature list, CLI table, troubleshooting |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | Build, install, release, and operational checklist |
 | [SECURITY.md](SECURITY.md) | What data may go to LLMs, reporting vulnerabilities |
-| [AGENTS.md](AGENTS.md) | Architecture, phases, CI, test-only env vars |
+| [AGENTS.md](../../AGENTS.md) | Architecture, phases, CI, test-only env vars |
 
-If something fails, start with **`--help`**, then **`--api-key-status`**, then the [Troubleshooting](README.md#troubleshooting) section in the README.
+If something fails, start with **`--help`**, then **`--api-key-status`**, then the [Troubleshooting](../../README.md#troubleshooting) section in the README.

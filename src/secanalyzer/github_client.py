@@ -9,6 +9,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any, Callable
 
+from secanalyzer import operations
 from secanalyzer.exceptions import GitHubApiError, UserFacingError
 
 USER_AGENT = "secanalyzer-cli/0.1"
@@ -32,6 +33,11 @@ def github_json_request(
     body: bytes | None = None,
     urlopen: Callable[..., Any] | None = None,
 ) -> Any:
+    """Send one GitHub JSON request.
+
+    Authorization never enters logs; operational events include only method,
+    status, and the path without query parameters for troubleshooting.
+    """
     opener = urlopen or urllib.request.urlopen
     headers = {
         "Accept": "application/vnd.github+json",
@@ -48,20 +54,52 @@ def github_json_request(
             raw = resp.read()
     except urllib.error.HTTPError as e:
         detail = e.read().decode("utf-8", errors="replace")[:800]
+        operations.event(
+            "github.request_failed",
+            level=30,
+            method=method,
+            status=e.code,
+            url=url.split("?")[0],
+        )
         raise GitHubApiError(
             f"GitHub HTTP {e.code} for {url.split('?')[0]}: {detail or e.reason}",
         ) from e
     except urllib.error.URLError as e:
+        operations.event(
+            "github.request_unreachable",
+            level=30,
+            method=method,
+            url=url.split("?")[0],
+            reason=str(e.reason),
+        )
         raise GitHubApiError(f"Cannot reach GitHub: {e.reason}.") from e
     except OSError as e:
+        operations.event(
+            "github.request_network_error",
+            level=30,
+            method=method,
+            url=url.split("?")[0],
+            error=str(e),
+        )
         raise GitHubApiError(f"Network error talking to GitHub: {e}") from e
 
     if code == 204:
+        operations.event("github.request_completed", method=method, status=code, url=url.split("?")[0])
         return None
     try:
-        return json.loads(raw.decode("utf-8"))
+        data = json.loads(raw.decode("utf-8"))
     except json.JSONDecodeError as e:
+        operations.event(
+            "github.invalid_json",
+            level=30,
+            method=method,
+            status=code,
+            url=url.split("?")[0],
+        )
         raise GitHubApiError("GitHub returned invalid JSON.") from e
+    operations.event("github.request_completed", method=method, status=code, url=url.split("?")[0])
+    return data
+    return data
 
 
 @dataclass(frozen=True)
