@@ -89,13 +89,13 @@ Disable logs:
 SECANALYZER_LOG_DISABLE=1 uv run secanalyzer --help
 ```
 
-## Required Final Documentation
+## Documentation
 
-The README and Deployment Guide requirement is satisfied by this README plus the detailed deployment guide:
+Please refer to the detailed deployment guide for a deeper dive into the internals:
 
 - [deliverables/README_AND_DEPLOYMENT_GUIDE.md](deliverables/README_AND_DEPLOYMENT_GUIDE.md)
 
-That guide has the full third-party instructions to build, configure, monitor, and run the application. This README stays short so someone can get the project running fast.
+That guide has the full third-party instructions to build, configure, monitor, and run the application. This README is primarily for a quickstart.
 
 Other final deliverables:
 
