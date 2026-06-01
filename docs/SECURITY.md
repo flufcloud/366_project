@@ -1,9 +1,5 @@
 ﻿# Security policy
 
-## Reporting a vulnerability
-
-Please **do not** open a public GitHub issue for undisclosed security problems. For this course project, contact the maintainers privately (for example, your instructor or the repository owner) with enough detail to reproduce the issue. Include affected versions, steps to reproduce, and impact if known.
-
 ## Data handling and third-party services
 
 `secanalyzer` may call **GitHub** (REST API) and **LLM vendors** (Anthropic Claude or Google Gemini) when you use those features. API keys and tokens are stored only under the user config directory and are sent only in HTTP headers or query parameters as required by each API—not embedded in prompts as instructions.
