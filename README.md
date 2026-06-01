@@ -1,6 +1,19 @@
 ﻿# secanalyzer
 
-Local CLI for codebase security review. It scans a repo, writes Markdown reports, runs Bandit on Python source, and can use an LLM to summarize security risks in code or GitHub issues/PRs.
+Local CLI for LLM-powered codebase security reviewer.
+
+## Deliverables
+
+- [Final Written Report PDF](deliverables/final_report.docx.pdf)
+- [Retrospective PDF](deliverables/retrospective.pdf)
+- [Presentation Slides PDF](deliverables/slides.pdf)
+
+Previous milestone docs:
+
+- [M2 Agile Requirements](milestones/M2_Agile_Requirements.md)
+- [M3 Design and Threat Modeling](milestones/M3_Design_Document_ThreatModeling.md)
+- [M4 Beta Release Report](milestones/M4_Beta_Release_Report.md)
+- [M5 Final Release Report](milestones/M5_Final_Release_Report.md)
 
 ## Quickstart
 
@@ -9,14 +22,6 @@ git clone https://github.com/flufcloud/366_project.git
 cd 366_project
 uv sync --frozen --all-groups
 uv run secanalyzer --help
-```
-
-Run the validation checks:
-
-```bash
-uv run pytest
-uv run bandit -r src/secanalyzer
-uv run pip-audit
 ```
 
 Run a local static scan:
@@ -89,27 +94,6 @@ Disable logs:
 SECANALYZER_LOG_DISABLE=1 uv run secanalyzer --help
 ```
 
-## Documentation
-
-Please refer to the detailed deployment guide for a deeper dive into the internals:
-
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
-
-That guide has the full third-party instructions to build, configure, monitor, and run the application. This README is primarily for a quickstart.
-
-Final deliverables:
-
-- [Final Written Report PDF](deliverables/final_report.docx.pdf)
-- [Retrospective PDF](deliverables/retrospective.pdf)
-- [Presentation Slides PDF](deliverables/slides.pdf)
-
-Previous milestone docs:
-
-- [M2 Agile Requirements](milestones/M2_Agile_Requirements.md)
-- [M3 Design and Threat Modeling](milestones/M3_Design_Document_ThreatModeling.md)
-- [M4 Beta Release Report](milestones/M4_Beta_Release_Report.md)
-- [M5 Final Release Report](milestones/M5_Final_Release_Report.md)
-
 ## Security
 
 The main security controls are path confinement, extension allowlisting, secret redaction, LLM pre-send blocking, schema validation, local-only credential storage, Bandit, `pip-audit`, and local operational logging.
@@ -118,3 +102,9 @@ Details:
 
 - [Security policy](docs/SECURITY.md)
 - [Security report](docs/SECURITY_REPORT.md)
+
+## Documentation
+
+Please refer to the detailed deployment guide for a deeper dive into the internals:
+
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
