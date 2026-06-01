@@ -7,6 +7,8 @@ Local CLI for LLM-powered codebase security reviewer.
 - [Final Written Report PDF](deliverables/final_report.docx.pdf)
 - [Retrospective PDF](deliverables/retrospective.pdf)
 - [Presentation Slides PDF](deliverables/slides.pdf)
+- Issue Tracker through Github Issues.
+- Detailed documentation on deployment [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 Previous milestone docs:
 
