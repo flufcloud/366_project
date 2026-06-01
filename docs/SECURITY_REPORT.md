@@ -128,6 +128,9 @@ External trust boundaries: **GitHub REST API**, **Anthropic / Google LLM APIs**.
 | Data classification for LLM | [SECURITY.md](SECURITY.md) “What may / must not be sent” |
 | First-run operational safety | [QUICKSTART.md](QUICKSTART.md) (venv OS mismatch) |
 | Local operational logging | [`operations.py`](../src/secanalyzer/operations.py), [SECURITY.md](SECURITY.md) “Operational logging” |
+| Security artifact control | This report is itself a security artifact and should stay versioned with the final codebase. |
+
+The final codebase security report is an important security component because it records accepted risks, mitigations, and validation evidence. Losing control of this artifact, or letting it drift from the released code, creates audit risk: future maintainers could rely on outdated threat assumptions or miss unresolved security work.
 
 ---
 
