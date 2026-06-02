@@ -1,7 +1,7 @@
 ﻿# Security Report — Threat Model vs. Implementation
 
 **Audience:** Security review or course presentation tying **documented threats** to **concrete controls** in code and process.  
-**Basis:** The project’s formal threat catalog (five attacks, DFD surface points **A1–A6**) and the shipped implementation under [`src/secanalyzer/`](../src/secanalyzer/).
+**Basis:** The project’s formal threat catalog (six attacks, DFD surface points **A1–A7**) and the shipped implementation under [`src/secanalyzer/`](../src/secanalyzer/).
 
 This report maps each **cataloged attack** to **design goals**, **where it is mitigated in code or CI**, and **residual risk**.
 
@@ -17,6 +17,7 @@ This report maps each **cataloged attack** to **design goals**, **where it is mi
 | **A4** | LLM prompt assembly | Combined system + user text before vendor API. |
 | **A5** | LLM response handling | Parsed JSON shown to user. |
 | **A6** | Credential storage | PAT and LLM key files on disk and in memory during HTTP. |
+| **A7** | Security artifacts | Final reports, issue logs, and validation evidence that describe system weaknesses. |
 
 External trust boundaries: **GitHub REST API**, **Anthropic / Google LLM APIs**.
 
@@ -31,6 +32,7 @@ External trust boundaries: **GitHub REST API**, **Anthropic / Google LLM APIs**.
 | **3** Path traversal / shell injection | Elevation, Tampering | Confine reads; no shell with filenames | `Path.resolve`, `relative_to` root check; `os.walk(..., followlinks=False)`; no subprocess shell for scan ([`repo_analyzer.py`](../src/secanalyzer/repo_analyzer.py)) | Logic bugs in path handling; TOCTOU on unusual FS layouts—**defense in depth** still recommended (run in disposable VM for hostile trees). |
 | **4** Sensitive code / PII to LLM vendor | Information disclosure | Minimize payload; redact; abort if secrets in outbound prompt | **`redact_text`** on repo scan output; **pre-send** `redact_text` on **full** assembled LLM prompt with **abort on any hit** ([`llm.py`](../src/secanalyzer/llm.py)); truncation warnings; PR patch caps ([`github_client.py`](../src/secanalyzer/github_client.py)); **`--scan`** narrative uses **bounded inventory** only ([`build_scan_inventory_for_llm`](../src/secanalyzer/repo_analyzer.py)) — no full-repo paste by default | Heuristic redaction **misses novel secret formats**; users may still send proprietary logic intentionally—**policy** and **vendor terms** matter. |
 | **5** Dependency / supply chain compromise | Tampering | Pin versions; audit on CI | **`uv.lock`** + **`uv sync --frozen`** in CI ([`ci.yml`](../.github/workflows/ci.yml)); **`pip-audit`** in CI and dev group; **`bandit`** static analysis | Lockfile compromise, compromised PyPI package **not** covered by app runtime alone; org should review PRs that touch `uv.lock`. |
+| **6** Security report theft | Information disclosure | Treat final security artifacts as controlled release materials | Final report is versioned with the codebase, avoids secrets, and records accepted risks in [ISSUE_LOG.md](ISSUE_LOG.md) instead of hidden notes | If stolen or separated from the release context, the report can help attackers prioritize known gaps. |
 
 ---
 
@@ -109,6 +111,16 @@ External trust boundaries: **GitHub REST API**, **Anthropic / Google LLM APIs**.
 
 ---
 
+### Attack 6 — Security report theft (A7)
+
+**Threat:** An attacker steals or obtains the final codebase security report and uses its threat mappings, accepted risks, and validation evidence to focus attacks.
+
+**Mitigations implemented:** The report is treated as a controlled security artifact: it is versioned with the final codebase, contains no credentials, and points residual risks to [ISSUE_LOG.md](ISSUE_LOG.md) so maintainers can track them formally.
+
+**Residual risk:** The report still reveals useful attacker context. If shared outside the intended audience, it can reduce reconnaissance time.
+
+---
+
 ## 4. Response handling (A5)
 
 **Threat:** Model returns malicious or misleading free text executed as code.
@@ -128,9 +140,6 @@ External trust boundaries: **GitHub REST API**, **Anthropic / Google LLM APIs**.
 | Data classification for LLM | [SECURITY.md](SECURITY.md) “What may / must not be sent” |
 | First-run operational safety | [QUICKSTART.md](QUICKSTART.md) (venv OS mismatch) |
 | Local operational logging | [`operations.py`](../src/secanalyzer/operations.py), [SECURITY.md](SECURITY.md) “Operational logging” |
-| Security artifact control | This report is itself a security artifact and should stay versioned with the final codebase. |
-
-The final codebase security report is an important security component because it records accepted risks, mitigations, and validation evidence. Losing control of this artifact, or letting it drift from the released code, creates audit risk: future maintainers could rely on outdated threat assumptions or miss unresolved security work.
 
 ---
 
